@@ -77,13 +77,12 @@ export async function fetchArchiiProjects(
   }
 
   try {
-    const url = `${ARCHII_API_URL}/api/v1/projects?tenantId=${encodeURIComponent(tenantId)}`;
+    const url = `${ARCHII_API_URL}/api/v1/projects?limit=100`;
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'X-API-Key': apiKey,
         'Content-Type': 'application/json',
-        'X-Tenant-Id': tenantId,
       },
     });
 
@@ -121,13 +120,12 @@ export async function fetchArchiiProject(
   }
 
   try {
-    const url = `${ARCHII_API_URL}/api/v1/projects/${encodeURIComponent(projectId)}?tenantId=${encodeURIComponent(tenantId)}`;
+    const url = `${ARCHII_API_URL}/api/v1/projects/${encodeURIComponent(projectId)}`;
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'X-API-Key': apiKey,
         'Content-Type': 'application/json',
-        'X-Tenant-Id': tenantId,
       },
     });
 
@@ -208,13 +206,12 @@ export async function testArchiiConnection(
   }
 
   try {
-    const url = `${ARCHII_API_URL}/api/v1/projects?tenantId=${encodeURIComponent(tenantId || '')}&limit=1`;
+    const url = `${ARCHII_API_URL}/api/v1/projects?limit=1`;
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'X-API-Key': apiKey,
         'Content-Type': 'application/json',
-        ...(tenantId ? { 'X-Tenant-Id': tenantId } : {}),
       },
     });
 
