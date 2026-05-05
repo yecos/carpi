@@ -1,0 +1,151 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// PROVEEDORES
+// ============================================
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  contact   String?
+  phone     String?
+  email     String?
+  address   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  materials Material[]
+}
+
+// ============================================
+// MATERIALES
+// ============================================
+enum MaterialCategory {
+  TABLERO
+  CANTO
+  HERRAJE
+  ACABADO
+  MANO_OBRA
+  OTRO
+}
+
+model Material {
+  id           String           @id @default(cuid())
+  name         String
+  category     MaterialCategory
+  unit         String           // m2, ml, unidad, hora
+  price        Float            // precio por unidad
+  supplierId   String?
+  supplier     Supplier?        @relation(fields: [supplierId], references: [id])
+  notes        String?
+  active       Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  // Propiedades específicas por categoría
+  thickness    Float?           // mm (para tableros)
+  width        Float?           // mm (para tableros/cantos)
+  length       Float?           // mm (para tableros/cantos)
+  color        String?          // color/acabado
+  materialType String?          // MDF, Melamina, Madera, etc.
+
+  furnitureComponents FurnitureComponent[]
+  quotationItems     QuotationItem[]
+}
+
+// ============================================
+// CATÁLOGO DE MOBILIARIO
+// ============================================
+enum FurnitureType {
+  COCINA
+  CLOSET
+  BANO
+  SALA
+  OFICINA
+  COMEDOR
+  DORMITORIO
+  OTRO
+}
+
+model FurnitureTemplate {
+  id          String        @id @default(cuid())
+  name        String
+  type        FurnitureType
+  description String?
+  image       String?
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  components     FurnitureComponent[]
+  quotationItems QuotationItem[]
+}
+
+model FurnitureComponent {
+  id               String           @id @default(cuid())
+  templateId       String
+  template         FurnitureTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name             String            // "Puerta", "Estante", "Fondo", "Lateral", etc.
+  quantity         Float             // cantidad (1, 2, etc.)
+  widthFormula     String            // fórmula o valor fijo: "ancho - 32" o "600"
+  heightFormula    String            // fórmula o valor fijo: "alto - 100" o "700"
+  depthFormula     String?           // fórmula para profundidad (si aplica)
+  materialCategory MaterialCategory  @default(TABLERO)
+  materialId       String?           // material específico (si es fijo)
+  material         Material?         @relation(fields: [materialId], references: [id])
+  needsEdge        Boolean           @default(false)   // necesita canto?
+  edgeSides        Int              @default(0)        // cantidad de lados con canto
+  edgeType         String?           // tipo de canto
+  hardwareList     String?           // JSON: lista de herrajes [{"id":"...", "qty": 4}]
+  laborHours       Float             @default(0)        // horas de mano de obra estimadas
+  sortOrder        Int               @default(0)
+}
+
+// ============================================
+// COTIZACIONES
+// ============================================
+model Quotation {
+  id            String   @id @default(cuid())
+  clientName    String
+  project       String
+  location      String?
+  notes         String?
+  subtotal      Float    @default(0)
+  margin        Float    @default(25)  // porcentaje de margen
+  total         Float    @default(0)
+  status        String   @default("BORRADOR") // BORRADOR, ENVIADA, APROBADA, RECHAZADA
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  items QuotationItem[]
+}
+
+model QuotationItem {
+  id            String             @id @default(cuid())
+  quotationId   String
+  quotation     Quotation          @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  templateId    String?
+  template      FurnitureTemplate? @relation(fields: [templateId], references: [id])
+  customName    String?              // nombre personalizado si no usa template
+  width         Float                // mm
+  height        Float                // mm
+  depth         Float?               // mm
+  quantity      Int      @default(1)
+  materialId    String?
+  material      Material? @relation(fields: [materialId], references: [id])
+  materialType  String?              // tipo de material: MDF, Melamina, Madera
+  finishType    String?              // tipo de acabado: lacado, melamina, natural
+  subtotal      Float    @default(0) // costo calculado
+  detail        String?             // JSON con desglose detallado
+  sortOrder     Int      @default(0)
+}
