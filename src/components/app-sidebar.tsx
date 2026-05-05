@@ -17,6 +17,7 @@ import {
   Settings,
   Building2,
   Link2,
+  Bot,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,7 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/auth-context';
 
-export type Section = 'dashboard' | 'materiales' | 'proveedores' | 'catalogo' | 'cotizaciones' | 'clientes' | 'comparador' | 'archii-config';
+export type Section = 'dashboard' | 'materiales' | 'proveedores' | 'catalogo' | 'cotizaciones' | 'clientes' | 'comparador' | 'archii-config' | 'ai-chat';
 
 interface AppSidebarProps {
   activeSection: Section;
@@ -51,6 +52,7 @@ const navItems: Array<{
   { id: 'proveedores', label: 'Proveedores', icon: Truck, group: 'datos' },
   { id: 'catalogo', label: 'Catálogo', icon: BookOpen, group: 'datos' },
   { id: 'comparador', label: 'Comparador', icon: BarChart3, group: 'herramientas' },
+  { id: 'ai-chat', label: 'Asistente IA', icon: Bot, group: 'herramientas' },
   { id: 'archii-config', label: 'Archii', icon: Link2, group: 'integracion' },
 ];
 
@@ -69,6 +71,12 @@ export function AppSidebar({
     datos: 'Datos',
     herramientas: 'Herramientas',
     integracion: 'Integración',
+  };
+  const groupIcons: Record<string, React.ElementType> = {
+    general: LayoutDashboard,
+    datos: Package,
+    herramientas: BarChart3,
+    integracion: Link2,
   };
 
   return (

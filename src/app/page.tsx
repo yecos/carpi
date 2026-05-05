@@ -10,9 +10,10 @@ import { QuotationsView } from '@/components/quotations-view';
 import { ClientsView } from '@/components/clients-view';
 import { ComparisonView } from '@/components/comparison-view';
 import { ArchiiConfig } from '@/components/archii-config';
+import { AiChat } from '@/components/ai-chat';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Hammer } from 'lucide-react';
+import { Menu, Hammer, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth-context';
 
@@ -22,6 +23,7 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [seeded, setSeeded] = useState(false);
+  const [aiChatOpen, setAiChatOpen] = useState(false);
   const { isAuthenticated, loading, currentTenantId } = useAuth();
 
   // Auto-seed on first load
@@ -82,6 +84,8 @@ export default function Home() {
         return <ComparisonView />;
       case 'archii-config':
         return <ArchiiConfig />;
+      case 'ai-chat':
+        return <AiChat onClose={() => setActiveSection('dashboard')} />;
       default:
         return <DashboardView onNavigate={handleSectionChange} />;
     }
@@ -162,6 +166,17 @@ export default function Home() {
         <footer className="border-t px-4 py-2 text-center text-xs text-muted-foreground bg-card/50">
           Cotizador Carpintería — Sistema de Cotizaciones Premium
         </footer>
+
+        {/* Floating AI Chat Button */}
+        {!aiChatOpen && activeSection !== 'ai-chat' && (
+          <Button
+            onClick={() => setActiveSection('ai-chat')}
+            className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-300 hover:scale-105 z-50"
+            size="icon"
+          >
+            <Bot className="h-6 w-6 text-white" />
+          </Button>
+        )}
       </div>
     </div>
   );

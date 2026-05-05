@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server';
-
-// Models to try in order (fallback chain)
-const MODEL_FALLBACKS = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
+import { aiVision } from '@/lib/ai-service';
 
 // POST /api/analyze-furniture
-// Analyzes a furniture photo using Google Gemini Vision API
-// Works on both local dev and Vercel (public API endpoint)
-// Falls back to alternative models if the primary one is rate-limited
+// Analyzes a furniture photo using AI Vision (Z AI or Gemini fallback)
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -16,20 +12,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'Se requiere una imagen' },
         { status: 400 }
-      );
-    }
-
-    // Get Gemini API key
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-
-    if (!geminiApiKey) {
-      console.error('Gemini API key not configured. Set GEMINI_API_KEY env var.');
-      return NextResponse.json(
-        {
-          error: 'Servicio de IA no configurado. Configure la variable de entorno GEMINI_API_KEY.',
-          code: 'AI_NOT_CONFIGURED',
-        },
-        { status: 503 }
       );
     }
 
@@ -75,184 +57,71 @@ REGLAS IMPORTANTES:
 - Identifica herrajes visibles: bisagras, tiradores, correderas
 - El campo confidence indica qué tan seguro estás de las estimaciones`;
 
-    // Parse the base64 image data to extract mime type and raw base64
-    let mimeType = 'image/jpeg';
-    let base64Data = image;
-
-    if (image.startsWith('data:')) {
-      const matches = image.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
-      if (matches) {
-        mimeType = matches[1];
-        base64Data = matches[2];
-      }
-    }
-
-    // Gemini API request body
-    const geminiRequestBody = {
-      contents: [
+    // Use the unified AI service (Z AI first, Gemini fallback)
+    const result = await aiVision(
+      [
         {
-          parts: [
-            { text: prompt },
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data: base64Data,
-              },
-            },
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: image } },
           ],
         },
       ],
-      generationConfig: {
-        temperature: 0.2,
-        topP: 0.8,
-        maxOutputTokens: 2048,
-      },
-    };
+      { maxTokens: 2048, temperature: 0.2 }
+    );
 
-    // Determine model priority: env var override or fallback chain
-    const preferredModel = process.env.GEMINI_MODEL;
-    const modelsToTry = preferredModel
-      ? [preferredModel, ...MODEL_FALLBACKS.filter(m => m !== preferredModel)]
-      : MODEL_FALLBACKS;
-
-    let lastError: { status: number; body: string } | null = null;
-
-    // Try each model in the fallback chain
-    for (const model of modelsToTry) {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
-
-      let apiResponse: Response;
-      try {
-        apiResponse = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(geminiRequestBody),
-          signal: AbortSignal.timeout(60000),
-        });
-      } catch (fetchError: unknown) {
-        const errorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
-        const isTimeout = errorMsg.includes('timeout') || errorMsg.includes('Timeout') || errorMsg.includes('abort');
-        const isConnectionRefused = errorMsg.includes('ECONNREFUSED') || errorMsg.includes('fetch failed') || errorMsg.includes('ENOTFOUND');
-
-        console.error(`Gemini API connection error (model: ${model}):`, errorMsg);
-
-        if (isTimeout) {
-          return NextResponse.json(
-            { error: 'El análisis está demorando demasiado. Intente de nuevo.', code: 'AI_TIMEOUT' },
-            { status: 504 }
-          );
-        }
-
-        if (isConnectionRefused) {
-          return NextResponse.json(
-            { error: 'No se pudo conectar con Google Gemini. Verifique su conexión a internet.', code: 'AI_SERVICE_UNREACHABLE' },
-            { status: 503 }
-          );
-        }
-
-        return NextResponse.json(
-          { error: 'Error de conexión con el servicio de IA.', code: 'AI_CONNECTION_ERROR' },
-          { status: 502 }
-        );
-      }
-
-      if (!apiResponse.ok) {
-        const errorBody = await apiResponse.text();
-        console.error(`Gemini API error (model: ${model}):`, apiResponse.status, errorBody);
-        lastError = { status: apiResponse.status, body: errorBody };
-
-        // If rate limited (429), try next model in fallback chain
-        if (apiResponse.status === 429) {
-          console.log(`Model ${model} rate limited, trying next fallback...`);
-          continue;
-        }
-
-        // If model not found (404), try next model
-        if (apiResponse.status === 404) {
-          console.log(`Model ${model} not found, trying next fallback...`);
-          continue;
-        }
-
-        // For other errors, return immediately
-        if (apiResponse.status === 400) {
-          return NextResponse.json(
-            { error: 'La imagen no es válida o el formato no es compatible. Intente con otra imagen.', code: 'AI_INVALID_IMAGE' },
-            { status: 400 }
-          );
-        }
-
-        if (apiResponse.status === 403) {
-          return NextResponse.json(
-            { error: 'La API key de Gemini no es válida o ha expirado. Configure una clave válida.', code: 'AI_AUTH_ERROR' },
-            { status: 502 }
-          );
-        }
-
-        return NextResponse.json(
-          { error: 'Error del servicio de IA. Intente de nuevo más tarde.', code: 'AI_API_ERROR' },
-          { status: apiResponse.status >= 500 ? 502 : apiResponse.status }
-        );
-      }
-
-      // Success! Parse the response
-      const response = await apiResponse.json();
-      const content = response.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!content) {
-        const finishReason = response.candidates?.[0]?.finishReason;
-        if (finishReason === 'SAFETY') {
-          return NextResponse.json(
-            { error: 'La imagen fue bloqueada por los filtros de seguridad. Intente con otra imagen.', code: 'AI_SAFETY_BLOCK' },
-            { status: 400 }
-          );
-        }
-        return NextResponse.json(
-          { error: 'La IA no devolvió una respuesta válida. Intente de nuevo.', code: 'AI_EMPTY_RESPONSE' },
-          { status: 502 }
-        );
-      }
-
-      // Try to parse the JSON response
-      let parsed;
-      try {
-        const cleaned = content
-          .replace(/```json\s*/g, '')
-          .replace(/```\s*/g, '')
-          .trim();
-        parsed = JSON.parse(cleaned);
-      } catch {
-        console.error('Failed to parse Gemini response as JSON:', content);
-        return NextResponse.json({
-          success: false,
-          rawResponse: content,
-          error: 'La IA no devolvió un formato válido. Intente de nuevo.',
-          code: 'AI_PARSE_ERROR',
-        });
-      }
-
+    // Try to parse the JSON response
+    let parsed;
+    try {
+      const cleaned = result.content
+        .replace(/```json\s*/g, '')
+        .replace(/```\s*/g, '')
+        .trim();
+      parsed = JSON.parse(cleaned);
+    } catch {
+      console.error('Failed to parse AI response as JSON:', result.content);
       return NextResponse.json({
-        success: true,
-        analysis: parsed,
-        model, // Include which model was used for debugging
+        success: false,
+        rawResponse: result.content,
+        error: 'La IA no devolvió un formato válido. Intente de nuevo.',
+        code: 'AI_PARSE_ERROR',
       });
     }
 
-    // All models failed with 429 or 404
-    if (lastError?.status === 429) {
+    return NextResponse.json({
+      success: true,
+      analysis: parsed,
+      provider: result.provider,
+      model: result.model,
+    });
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('Error analyzing furniture image:', errorMsg);
+
+    if (errorMsg.includes('not configured')) {
       return NextResponse.json(
-        { error: 'Se ha excedido la cuota de uso de la IA. Espere unos minutos e intente de nuevo.', code: 'AI_QUOTA_EXCEEDED' },
+        { error: 'Servicio de IA no configurado. Configure GEMINI_API_KEY o Z AI.', code: 'AI_NOT_CONFIGURED' },
+        { status: 503 }
+      );
+    }
+
+    if (errorMsg.includes('SAFETY_BLOCK')) {
+      return NextResponse.json(
+        { error: 'La imagen fue bloqueada por filtros de seguridad. Intente con otra foto.', code: 'AI_SAFETY_BLOCK' },
+        { status: 400 }
+      );
+    }
+
+    if (errorMsg.includes('unavailable')) {
+      return NextResponse.json(
+        { error: 'El servicio de IA no está disponible. Intente más tarde.', code: 'AI_QUOTA_EXCEEDED' },
         { status: 429 }
       );
     }
 
     return NextResponse.json(
-      { error: 'No se encontró un modelo de IA disponible. Intente de nuevo más tarde.', code: 'AI_NO_MODEL_AVAILABLE' },
-      { status: 503 }
-    );
-  } catch (error) {
-    console.error('Unexpected error analyzing furniture image:', error);
-    return NextResponse.json(
-      { error: 'Error inesperado al analizar la imagen. Intente de nuevo.', code: 'UNEXPECTED_ERROR' },
+      { error: 'Error al analizar la imagen. Intente de nuevo.', code: 'AI_ERROR' },
       { status: 500 }
     );
   }
