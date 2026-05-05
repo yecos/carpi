@@ -1,6 +1,7 @@
 {
-  "name": "nextjs_tailwind_shadcn_ts",
-  "version": "0.2.0",
+  "name": "carpi",
+  "version": "1.0.0",
+  "description": "Cotizador de Carpintería - Sistema automatizado de cotizaciones para proyectos de diseño de interiores",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
@@ -10,7 +11,9 @@
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "db:seed": "curl -X POST http://localhost:3000/api/seed",
+    "setup": "bun install && bunx prisma db push && bunx prisma generate"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
