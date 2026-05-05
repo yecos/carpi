@@ -135,8 +135,9 @@ export function AiChat({ onClose }: AiChatProps) {
   }
 
   const providerLabels: Record<string, { label: string; color: string }> = {
-    'z-ai': { label: 'Z AI', color: 'bg-blue-100 text-blue-700' },
+    'openai': { label: 'ChatGPT', color: 'bg-green-100 text-green-700' },
     'gemini': { label: 'Gemini', color: 'bg-purple-100 text-purple-700' },
+    'z-ai': { label: 'Z AI', color: 'bg-blue-100 text-blue-700' },
     'none': { label: 'Sin IA', color: 'bg-red-100 text-red-700' },
   };
 

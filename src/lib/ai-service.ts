@@ -1,9 +1,26 @@
 // Unified AI Service for Carpi
-// Tries Z AI (internal) first, falls back to Gemini (public) if unavailable
-// This allows the app to work in both local dev and Vercel
+// Provider priority: OpenAI → Gemini → Z AI (local only)
+// OpenAI is preferred for Vercel (public API, fast, reliable)
+// Z AI is only used in local dev where the internal network is accessible
 
 // ============================
-// Z AI Provider (local/internal)
+// OpenAI Provider (ChatGPT) - PRIMARY for production
+// ============================
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const OPENAI_CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini';
+const OPENAI_VISION_MODEL = process.env.OPENAI_VISION_MODEL || 'gpt-4o';
+const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+
+// ============================
+// Gemini Provider (public/Vercel) - SECONDARY fallback
+// ============================
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+
+// ============================
+// Z AI Provider (local/internal) - TERTIARY fallback
 // ============================
 
 const ZAI_BASE_URL = process.env.ZAI_BASE_URL || 'http://172.25.136.193:8080/v1';
@@ -11,140 +28,118 @@ const ZAI_API_KEY = process.env.ZAI_API_KEY || 'Z.ai';
 const ZAI_TOKEN = process.env.ZAI_TOKEN || '';
 
 // ============================
-// Gemini Provider (public/Vercel)
+// Types
 // ============================
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+export type AIProvider = 'openai' | 'gemini' | 'z-ai';
 
-// ============================
-// Provider detection
-// ============================
-
-let zAiAvailable: boolean | null = null;
-
-async function checkZAiAvailability(): Promise<boolean> {
-  if (zAiAvailable !== null) return zAiAvailable;
-
-  try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${ZAI_API_KEY}`,
-      'X-Z-AI-From': 'Z',
-    };
-    if (ZAI_TOKEN) headers['X-Token'] = ZAI_TOKEN;
-
-    const res = await fetch(`${ZAI_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: 'ping' }],
-        max_tokens: 5,
-      }),
-      signal: AbortSignal.timeout(5000),
-    });
-
-    zAiAvailable = res.ok;
-    return zAiAvailable;
-  } catch {
-    zAiAvailable = false;
-    return false;
-  }
+export interface AIResponse {
+  content: string;
+  provider: AIProvider;
+  model: string;
 }
 
-// Reset availability check (e.g., after a failure)
-function resetZAiAvailability() {
-  zAiAvailable = null;
+export interface AIChatOptions {
+  maxTokens?: number;
+  temperature?: number;
 }
 
-// ============================
-// Z AI API calls
-// ============================
-
-interface ZAiMessage {
+interface AIMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string | ZAiContentPart[];
+  content: string | AIContentPart[];
 }
 
-interface ZAiContentPart {
+interface AIContentPart {
   type: 'text' | 'image_url';
   text?: string;
   image_url?: { url: string };
 }
 
-async function callZAiChat(
-  messages: ZAiMessage[],
-  options?: { maxTokens?: number; temperature?: number }
+// ============================
+// OpenAI API calls
+// ============================
+
+async function callOpenAIChat(
+  messages: AIMessage[],
+  options?: AIChatOptions
 ): Promise<{ content: string; model: string }> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${ZAI_API_KEY}`,
-    'X-Z-AI-From': 'Z',
-  };
-  if (ZAI_TOKEN) headers['X-Token'] = ZAI_TOKEN;
+  if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not configured');
 
-  const body: Record<string, unknown> = {
-    messages,
-    thinking: { type: 'disabled' },
+  const body = {
+    model: OPENAI_CHAT_MODEL,
+    messages: messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    })),
+    max_tokens: options?.maxTokens ?? 2048,
+    temperature: options?.temperature ?? 0.7,
   };
-  if (options?.maxTokens) body.max_tokens = options.maxTokens;
-  if (options?.temperature !== undefined) body.temperature = options.temperature;
 
-  const res = await fetch(`${ZAI_BASE_URL}/chat/completions`, {
+  const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
     method: 'POST',
-    headers,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(60000),
   });
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Z AI error ${res.status}: ${errText}`);
+    if (res.status === 429) throw new Error('OpenAI rate limit exceeded');
+    if (res.status === 401) throw new Error('OpenAI API key invalid');
+    throw new Error(`OpenAI error ${res.status}: ${errText}`);
   }
 
   const data = await res.json();
   const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error('Z AI empty response');
+  if (!content) throw new Error('OpenAI empty response');
 
-  return { content, model: data.model || 'z-ai' };
+  return { content, model: data.model || OPENAI_CHAT_MODEL };
 }
 
-async function callZAiVision(
-  messages: ZAiMessage[],
-  options?: { maxTokens?: number; temperature?: number }
+async function callOpenAIVision(
+  messages: AIMessage[],
+  options?: AIChatOptions
 ): Promise<{ content: string; model: string }> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${ZAI_API_KEY}`,
-    'X-Z-AI-From': 'Z',
-  };
-  if (ZAI_TOKEN) headers['X-Token'] = ZAI_TOKEN;
+  if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not configured');
 
-  const body: Record<string, unknown> = {
-    model: process.env.ZAI_VISION_MODEL || 'glm-4v-flash',
-    messages,
-    thinking: { type: 'disabled' },
-  };
-  if (options?.maxTokens) body.max_tokens = options.maxTokens;
-  if (options?.temperature !== undefined) body.temperature = options.temperature;
+  // Convert messages to OpenAI format - they natively support image_url
+  const formattedMessages = messages.map(m => ({
+    role: m.role,
+    content: m.content,
+  }));
 
-  const res = await fetch(`${ZAI_BASE_URL}/chat/completions/vision`, {
+  const body = {
+    model: OPENAI_VISION_MODEL,
+    messages: formattedMessages,
+    max_tokens: options?.maxTokens ?? 2048,
+    temperature: options?.temperature ?? 0.2,
+  };
+
+  const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
     method: 'POST',
-    headers,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(90000),
   });
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Z AI Vision error ${res.status}: ${errText}`);
+    if (res.status === 429) throw new Error('OpenAI rate limit exceeded');
+    if (res.status === 401) throw new Error('OpenAI API key invalid');
+    throw new Error(`OpenAI Vision error ${res.status}: ${errText}`);
   }
 
   const data = await res.json();
   const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error('Z AI Vision empty response');
+  if (!content) throw new Error('OpenAI Vision empty response');
 
-  return { content, model: data.model || 'z-ai-vision' };
+  return { content, model: data.model || OPENAI_VISION_MODEL };
 }
 
 // ============================
@@ -157,12 +152,11 @@ interface GeminiPart {
 }
 
 async function callGeminiChat(
-  messages: ZAiMessage[],
-  options?: { maxTokens?: number; temperature?: number }
+  messages: AIMessage[],
+  options?: AIChatOptions
 ): Promise<{ content: string; model: string }> {
   if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
 
-  // Convert OpenAI-style messages to Gemini format
   const parts: GeminiPart[] = [];
   for (const msg of messages) {
     if (typeof msg.content === 'string') {
@@ -197,7 +191,7 @@ async function callGeminiChat(
     });
 
     if (!res.ok) {
-      if (res.status === 429 || res.status === 404) continue; // Try next model
+      if (res.status === 429 || res.status === 404) continue;
       const errText = await res.text();
       throw new Error(`Gemini error ${res.status}: ${errText}`);
     }
@@ -218,12 +212,11 @@ async function callGeminiChat(
 }
 
 async function callGeminiVision(
-  messages: ZAiMessage[],
-  options?: { maxTokens?: number; temperature?: number }
+  messages: AIMessage[],
+  options?: AIChatOptions
 ): Promise<{ content: string; model: string }> {
   if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
 
-  // Convert messages to Gemini format with image support
   const parts: GeminiPart[] = [];
   for (const msg of messages) {
     if (typeof msg.content === 'string') {
@@ -296,78 +289,259 @@ async function callGeminiVision(
 }
 
 // ============================
-// Unified API
+// Z AI API calls (local only)
 // ============================
 
-export type AIProvider = 'z-ai' | 'gemini';
+let zAiAvailable: boolean | null = null;
 
-export interface AIResponse {
-  content: string;
-  provider: AIProvider;
-  model: string;
+async function checkZAiAvailability(): Promise<boolean> {
+  if (zAiAvailable !== null) return zAiAvailable;
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${ZAI_API_KEY}`,
+      'X-Z-AI-From': 'Z',
+    };
+    if (ZAI_TOKEN) headers['X-Token'] = ZAI_TOKEN;
+
+    const res = await fetch(`${ZAI_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: 'ping' }],
+        max_tokens: 5,
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    zAiAvailable = res.ok;
+    return zAiAvailable;
+  } catch {
+    zAiAvailable = false;
+    return false;
+  }
 }
 
-export interface AIChatOptions {
-  maxTokens?: number;
-  temperature?: number;
+function resetZAiAvailability() {
+  zAiAvailable = null;
 }
+
+async function callZAiChat(
+  messages: AIMessage[],
+  options?: AIChatOptions
+): Promise<{ content: string; model: string }> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${ZAI_API_KEY}`,
+    'X-Z-AI-From': 'Z',
+  };
+  if (ZAI_TOKEN) headers['X-Token'] = ZAI_TOKEN;
+
+  const body: Record<string, unknown> = {
+    messages,
+    thinking: { type: 'disabled' },
+  };
+  if (options?.maxTokens) body.max_tokens = options.maxTokens;
+  if (options?.temperature !== undefined) body.temperature = options.temperature;
+
+  const res = await fetch(`${ZAI_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(60000),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Z AI error ${res.status}: ${errText}`);
+  }
+
+  const data = await res.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error('Z AI empty response');
+
+  return { content, model: data.model || 'z-ai' };
+}
+
+async function callZAiVision(
+  messages: AIMessage[],
+  options?: AIChatOptions
+): Promise<{ content: string; model: string }> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${ZAI_API_KEY}`,
+    'X-Z-AI-From': 'Z',
+  };
+  if (ZAI_TOKEN) headers['X-Token'] = ZAI_TOKEN;
+
+  const body: Record<string, unknown> = {
+    model: process.env.ZAI_VISION_MODEL || 'glm-4v-flash',
+    messages,
+    thinking: { type: 'disabled' },
+  };
+  if (options?.maxTokens) body.max_tokens = options.maxTokens;
+  if (options?.temperature !== undefined) body.temperature = options.temperature;
+
+  const res = await fetch(`${ZAI_BASE_URL}/chat/completions/vision`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(60000),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Z AI Vision error ${res.status}: ${errText}`);
+  }
+
+  const data = await res.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error('Z AI Vision empty response');
+
+  return { content, model: data.model || 'z-ai-vision' };
+}
+
+// ============================
+// Unified API - Provider chain: OpenAI → Gemini → Z AI
+// ============================
 
 /**
  * Send a chat message to the AI.
- * Tries Z AI first, falls back to Gemini.
+ * Priority: OpenAI → Gemini → Z AI
  */
 export async function aiChat(
-  messages: ZAiMessage[],
+  messages: AIMessage[],
   options?: AIChatOptions
 ): Promise<AIResponse> {
-  // Try Z AI first
+  const errors: string[] = [];
+
+  // 1. Try OpenAI first (best for production)
+  if (OPENAI_API_KEY) {
+    try {
+      const result = await callOpenAIChat(messages, options);
+      return { ...result, provider: 'openai' };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('OpenAI chat failed:', msg);
+      errors.push(`OpenAI: ${msg}`);
+    }
+  }
+
+  // 2. Try Gemini
+  if (GEMINI_API_KEY) {
+    try {
+      const result = await callGeminiChat(messages, options);
+      return { ...result, provider: 'gemini' };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('Gemini chat failed:', msg);
+      errors.push(`Gemini: ${msg}`);
+    }
+  }
+
+  // 3. Try Z AI (local only)
   const isAvailable = await checkZAiAvailability();
   if (isAvailable) {
     try {
       const result = await callZAiChat(messages, options);
       return { ...result, provider: 'z-ai' };
     } catch (error) {
-      console.error('Z AI chat failed, falling back to Gemini:', error);
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('Z AI chat failed:', msg);
+      errors.push(`Z AI: ${msg}`);
       resetZAiAvailability();
     }
   }
 
-  // Fallback to Gemini
-  const result = await callGeminiChat(messages, options);
-  return { ...result, provider: 'gemini' };
+  throw new Error(
+    `No AI provider available. Configure OPENAI_API_KEY, GEMINI_API_KEY, or run locally with Z AI. Errors: ${errors.join('; ')}`
+  );
 }
 
 /**
  * Analyze an image with AI (vision).
- * Tries Z AI Vision first, falls back to Gemini.
+ * Priority: OpenAI → Gemini → Z AI
  */
 export async function aiVision(
-  messages: ZAiMessage[],
+  messages: AIMessage[],
   options?: AIChatOptions
 ): Promise<AIResponse> {
-  // Try Z AI Vision first
+  const errors: string[] = [];
+
+  // 1. Try OpenAI Vision (GPT-4o - best vision model)
+  if (OPENAI_API_KEY) {
+    try {
+      const result = await callOpenAIVision(messages, options);
+      return { ...result, provider: 'openai' };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('OpenAI Vision failed:', msg);
+      errors.push(`OpenAI: ${msg}`);
+    }
+  }
+
+  // 2. Try Gemini Vision
+  if (GEMINI_API_KEY) {
+    try {
+      const result = await callGeminiVision(messages, options);
+      return { ...result, provider: 'gemini' };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('Gemini Vision failed:', msg);
+      errors.push(`Gemini: ${msg}`);
+    }
+  }
+
+  // 3. Try Z AI Vision (local only)
   const isAvailable = await checkZAiAvailability();
   if (isAvailable) {
     try {
       const result = await callZAiVision(messages, options);
       return { ...result, provider: 'z-ai' };
     } catch (error) {
-      console.error('Z AI Vision failed, falling back to Gemini:', error);
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('Z AI Vision failed:', msg);
+      errors.push(`Z AI: ${msg}`);
       resetZAiAvailability();
     }
   }
 
-  // Fallback to Gemini
-  const result = await callGeminiVision(messages, options);
-  return { ...result, provider: 'gemini' };
+  throw new Error(
+    `No AI vision provider available. Configure OPENAI_API_KEY, GEMINI_API_KEY, or run locally with Z AI. Errors: ${errors.join('; ')}`
+  );
 }
 
 /**
  * Check which AI provider is currently active.
  */
 export async function getActiveProvider(): Promise<AIProvider | 'none'> {
+  if (OPENAI_API_KEY) return 'openai';
+  if (GEMINI_API_KEY) return 'gemini';
   const isAvailable = await checkZAiAvailability();
   if (isAvailable) return 'z-ai';
-  if (GEMINI_API_KEY) return 'gemini';
   return 'none';
+}
+
+/**
+ * Get info about all configured providers.
+ */
+export function getConfiguredProviders(): { provider: AIProvider; configured: boolean; models: string }[] {
+  return [
+    {
+      provider: 'openai',
+      configured: !!OPENAI_API_KEY,
+      models: `Chat: ${OPENAI_CHAT_MODEL}, Vision: ${OPENAI_VISION_MODEL}`,
+    },
+    {
+      provider: 'gemini',
+      configured: !!GEMINI_API_KEY,
+      models: GEMINI_MODEL,
+    },
+    {
+      provider: 'z-ai',
+      configured: !!ZAI_TOKEN || ZAI_BASE_URL !== 'http://172.25.136.193:8080/v1',
+      models: 'glm-4-flash / glm-4v-flash',
+    },
+  ];
 }

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { aiVision } from '@/lib/ai-service';
 
 // POST /api/analyze-furniture
-// Analyzes a furniture photo using AI Vision (Z AI or Gemini fallback)
+// Analyzes a furniture photo using AI Vision (OpenAI → Gemini → Z AI)
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -57,7 +57,7 @@ REGLAS IMPORTANTES:
 - Identifica herrajes visibles: bisagras, tiradores, correderas
 - El campo confidence indica qué tan seguro estás de las estimaciones`;
 
-    // Use the unified AI service (Z AI first, Gemini fallback)
+    // Use the unified AI service (OpenAI → Gemini → Z AI)
     const result = await aiVision(
       [
         {
@@ -101,8 +101,22 @@ REGLAS IMPORTANTES:
 
     if (errorMsg.includes('not configured')) {
       return NextResponse.json(
-        { error: 'Servicio de IA no configurado. Configure GEMINI_API_KEY o Z AI.', code: 'AI_NOT_CONFIGURED' },
+        { error: 'Servicio de IA no configurado. Configure OPENAI_API_KEY, GEMINI_API_KEY o Z AI.', code: 'AI_NOT_CONFIGURED' },
         { status: 503 }
+      );
+    }
+
+    if (errorMsg.includes('rate limit')) {
+      return NextResponse.json(
+        { error: 'Límite de uso alcanzado. Intente en unos segundos.', code: 'AI_RATE_LIMIT' },
+        { status: 429 }
+      );
+    }
+
+    if (errorMsg.includes('API key invalid')) {
+      return NextResponse.json(
+        { error: 'Clave de API inválida. Verifique la configuración.', code: 'AI_AUTH_ERROR' },
+        { status: 401 }
       );
     }
 

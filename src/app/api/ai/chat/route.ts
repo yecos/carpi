@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { aiChat, getActiveProvider } from '@/lib/ai-service';
+import { aiChat, getActiveProvider, getConfiguredProviders } from '@/lib/ai-service';
 
 // POST /api/ai/chat
 // General-purpose AI chat endpoint for Carpi
-// Uses Z AI when available (local), falls back to Gemini (Vercel)
+// Uses OpenAI → Gemini → Z AI (in priority order)
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -47,10 +47,24 @@ export async function POST(request: Request) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('AI chat error:', errorMsg);
 
-    if (errorMsg.includes('not configured') || errorMsg.includes('GEMINI_API_KEY')) {
+    if (errorMsg.includes('not configured') || errorMsg.includes('OPENAI_API_KEY') || errorMsg.includes('GEMINI_API_KEY')) {
       return NextResponse.json(
-        { error: 'Servicio de IA no configurado.', code: 'AI_NOT_CONFIGURED' },
+        { error: 'Servicio de IA no configurado. Configure OPENAI_API_KEY o GEMINI_API_KEY.', code: 'AI_NOT_CONFIGURED' },
         { status: 503 }
+      );
+    }
+
+    if (errorMsg.includes('rate limit')) {
+      return NextResponse.json(
+        { error: 'Límite de uso alcanzado. Intente en unos segundos.', code: 'AI_RATE_LIMIT' },
+        { status: 429 }
+      );
+    }
+
+    if (errorMsg.includes('API key invalid')) {
+      return NextResponse.json(
+        { error: 'Clave de API inválida. Verifique la configuración.', code: 'AI_AUTH_ERROR' },
+        { status: 401 }
       );
     }
 
@@ -73,9 +87,11 @@ export async function POST(request: Request) {
 export async function GET() {
   try {
     const provider = await getActiveProvider();
+    const configured = getConfiguredProviders();
     return NextResponse.json({
       provider,
       available: provider !== 'none',
+      providers: configured,
     });
   } catch {
     return NextResponse.json({ provider: 'none', available: false });
