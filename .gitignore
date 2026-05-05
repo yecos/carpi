@@ -52,3 +52,17 @@ prompt
 server.log
 # Skills directory
 /skills/
+# Database
+/db/
+# Download directory
+/download/
+# Worklog
+worklog.md
+# Z scripts
+.zscripts/
+# Examples
+/examples/
+# Mini services
+/mini-services/
+# Caddy
+Caddyfile
