@@ -67,6 +67,8 @@ export async function PUT(
           margin,
           total,
           status: body.status,
+          ...(body.archiiTenantId !== undefined && { archiiTenantId: body.archiiTenantId || null }),
+          ...(body.archiiProjectId !== undefined && { archiiProjectId: body.archiiProjectId || null }),
           items: {
             create: body.items.map(
               (item: Record<string, unknown>, i: number) => ({
@@ -107,6 +109,10 @@ export async function PUT(
           notes: body.notes,
           margin: body.margin,
           status: body.status,
+          ...(body.archiiTenantId !== undefined && { archiiTenantId: body.archiiTenantId || null }),
+          ...(body.archiiProjectId !== undefined && { archiiProjectId: body.archiiProjectId || null }),
+          ...(body.archiiSyncedAt !== undefined && { archiiSyncedAt: body.archiiSyncedAt ? new Date(body.archiiSyncedAt) : null }),
+          ...(body.archiiWebhookId !== undefined && { archiiWebhookId: body.archiiWebhookId || null }),
         },
         include: {
           items: {

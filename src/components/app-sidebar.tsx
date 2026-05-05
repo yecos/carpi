@@ -14,6 +14,9 @@ import {
   BarChart3,
   Sun,
   Moon,
+  Settings,
+  Building2,
+  Link2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,9 +25,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 import { useTheme } from 'next-themes';
+import { useAuth } from '@/lib/auth-context';
 
-export type Section = 'dashboard' | 'materiales' | 'proveedores' | 'catalogo' | 'cotizaciones' | 'clientes' | 'comparador';
+export type Section = 'dashboard' | 'materiales' | 'proveedores' | 'catalogo' | 'cotizaciones' | 'clientes' | 'comparador' | 'archii-config';
 
 interface AppSidebarProps {
   activeSection: Section;
@@ -46,6 +51,7 @@ const navItems: Array<{
   { id: 'proveedores', label: 'Proveedores', icon: Truck, group: 'datos' },
   { id: 'catalogo', label: 'Catálogo', icon: BookOpen, group: 'datos' },
   { id: 'comparador', label: 'Comparador', icon: BarChart3, group: 'herramientas' },
+  { id: 'archii-config', label: 'Archii', icon: Link2, group: 'integracion' },
 ];
 
 export function AppSidebar({
@@ -55,12 +61,14 @@ export function AppSidebar({
   onToggleCollapse,
 }: AppSidebarProps) {
   const { theme, setTheme } = useTheme();
+  const { currentTenantName, currentTenantId, tenants, isFirebaseConfigured } = useAuth();
 
-  const groups = ['general', 'datos', 'herramientas'] as const;
+  const groups = ['general', 'datos', 'herramientas', 'integracion'] as const;
   const groupLabels: Record<string, string> = {
     general: 'General',
     datos: 'Datos',
     herramientas: 'Herramientas',
+    integracion: 'Integración',
   };
 
   return (
@@ -83,6 +91,41 @@ export function AppSidebar({
             </div>
           )}
         </div>
+
+        {/* Tenant Indicator */}
+        {currentTenantId && !collapsed && (
+          <div className="px-3 py-2 border-b border-sidebar-border">
+            <button
+              onClick={() => onSectionChange('archii-config')}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-sidebar-accent transition-colors"
+            >
+              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/40 shrink-0">
+                <Building2 className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
+              </div>
+              <div className="min-w-0 text-left">
+                <p className="text-xs font-medium truncate">{currentTenantName || 'Tenant'}</p>
+                <p className="text-[10px] text-sidebar-foreground/50 truncate font-mono">{currentTenantId}</p>
+              </div>
+            </button>
+          </div>
+        )}
+        {currentTenantId && collapsed && (
+          <div className="px-2 py-2 border-b border-sidebar-border flex justify-center">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => onSectionChange('archii-config')}
+                  className="flex h-8 w-8 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
+                >
+                  <Building2 className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="font-medium bg-popover text-popover-foreground">
+                {currentTenantName || currentTenantId}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="flex-1 py-3 px-2 space-y-4 overflow-y-auto">
@@ -114,6 +157,11 @@ export function AppSidebar({
                     >
                       <Icon className={cn('h-[18px] w-[18px] shrink-0 transition-colors', isActive && 'text-sidebar-primary')} />
                       {!collapsed && <span>{item.label}</span>}
+                      {!collapsed && item.id === 'archii-config' && !isFirebaseConfigured && (
+                        <Badge className="text-[9px] h-4 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 ml-auto">
+                          Local
+                        </Badge>
+                      )}
                     </button>
                   );
 

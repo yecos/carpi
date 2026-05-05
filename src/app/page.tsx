@@ -9,10 +9,12 @@ import { CatalogView } from '@/components/catalog-view';
 import { QuotationsView } from '@/components/quotations-view';
 import { ClientsView } from '@/components/clients-view';
 import { ComparisonView } from '@/components/comparison-view';
+import { ArchiiConfig } from '@/components/archii-config';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Menu, Hammer } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/auth-context';
 
 export default function Home() {
   const [activeSection, setActiveSection] = useState<Section>('dashboard');
@@ -20,13 +22,14 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [seeded, setSeeded] = useState(false);
+  const { isAuthenticated, loading, currentTenantId } = useAuth();
 
   // Auto-seed on first load
   useEffect(() => {
-    if (!seeded) {
+    if (!seeded && !loading) {
       checkAndSeed();
     }
-  }, [seeded]);
+  }, [seeded, loading]);
 
   async function checkAndSeed() {
     try {
@@ -77,9 +80,25 @@ export default function Home() {
         return <ClientsView />;
       case 'comparador':
         return <ComparisonView />;
+      case 'archii-config':
+        return <ArchiiConfig />;
       default:
         return <DashboardView onNavigate={handleSectionChange} />;
     }
+  }
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl gradient-amber mx-auto shadow-md animate-pulse">
+            <Hammer className="h-6 w-6 text-white" />
+          </div>
+          <p className="text-sm text-muted-foreground">Cargando Cotizador Carpintería...</p>
+        </div>
+      </div>
+    );
   }
 
   return (

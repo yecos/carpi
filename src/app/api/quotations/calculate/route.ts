@@ -26,9 +26,13 @@ export async function POST(request: Request) {
     }
 
     // Get all active materials for calculation
-    const materials = await db.material.findMany({
-      where: { active: true },
-    });
+    const { searchParams } = new URL(request.url);
+    const archiiTenantId = searchParams.get('archiiTenantId') || undefined;
+
+    const where: Record<string, unknown> = { active: true };
+    if (archiiTenantId) where.archiiTenantId = archiiTenantId;
+
+    const materials = await db.material.findMany({ where });
 
     const materialPrices = materials.map(m => ({
       id: m.id,

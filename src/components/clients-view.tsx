@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Users, Phone, Mail, MapPin, FileText, Search } from 'lucide-react';
+import { useTenantFetch } from '@/lib/use-tenant-fetch';
 
 interface Client {
   id: string;
@@ -39,6 +40,7 @@ interface Client {
 }
 
 export function ClientsView() {
+  const { tenantFetch } = useTenantFetch();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,7 +58,7 @@ export function ClientsView() {
 
   const loadClients = useCallback(async () => {
     try {
-      const res = await fetch('/api/clients');
+      const res = await tenantFetch('/api/clients');
       const data = await res.json();
       setClients(data);
     } catch (error) {
@@ -65,7 +67,7 @@ export function ClientsView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tenantFetch]);
 
   useEffect(() => {
     loadClients();
@@ -105,14 +107,14 @@ export function ClientsView() {
       };
 
       if (editingClient) {
-        await fetch(`/api/clients/${editingClient.id}`, {
+        await tenantFetch(`/api/clients/${editingClient.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
         toast.success('Cliente actualizado');
       } else {
-        await fetch('/api/clients', {
+        await tenantFetch('/api/clients', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -130,7 +132,7 @@ export function ClientsView() {
 
   async function handleDelete(client: Client) {
     try {
-      await fetch(`/api/clients/${client.id}`, { method: 'DELETE' });
+      await tenantFetch(`/api/clients/${client.id}`, { method: 'DELETE' });
       toast.success('Cliente eliminado');
       setDeleteConfirm(null);
       loadClients();

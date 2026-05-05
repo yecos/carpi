@@ -1,14 +1,16 @@
 import { db } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
-// GET /api/quotations?status=BORRADOR
+// GET /api/quotations?status=BORRADOR&archiiTenantId=xxx
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
+    const archiiTenantId = searchParams.get('archiiTenantId') || undefined;
 
     const where: Record<string, unknown> = {};
     if (status) where.status = status;
+    if (archiiTenantId) where.archiiTenantId = archiiTenantId;
 
     const quotations = await db.quotation.findMany({
       where,
@@ -43,6 +45,8 @@ export async function POST(request: Request) {
     const margin = body.margin ?? 25;
     const total = subtotal * (1 + margin / 100);
 
+    const archiiTenantId = body.archiiTenantId || undefined;
+
     const quotation = await db.quotation.create({
       data: {
         clientName: body.clientName,
@@ -54,6 +58,8 @@ export async function POST(request: Request) {
         margin,
         total,
         status: body.status || 'BORRADOR',
+        archiiTenantId: archiiTenantId || null,
+        archiiProjectId: body.archiiProjectId || null,
         items: {
           create: (body.items || []).map(
             (item: Record<string, unknown>, i: number) => ({

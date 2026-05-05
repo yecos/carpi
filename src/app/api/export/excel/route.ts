@@ -3,11 +3,16 @@ import { db } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const archiiTenantId = searchParams.get('archiiTenantId') || undefined;
     const { type } = await request.json();
 
     if (type === 'materials') {
+      const where: Record<string, unknown> = { active: true };
+      if (archiiTenantId) where.archiiTenantId = archiiTenantId;
+
       const materials = await db.material.findMany({
-        where: { active: true },
+        where,
         include: { supplier: { select: { name: true } } },
         orderBy: { name: 'asc' },
       });
@@ -27,7 +32,11 @@ export async function POST(request: Request) {
     }
 
     if (type === 'quotations') {
+      const where: Record<string, unknown> = {};
+      if (archiiTenantId) where.archiiTenantId = archiiTenantId;
+
       const quotations = await db.quotation.findMany({
+        where,
         include: { items: true, client: true },
         orderBy: { createdAt: 'desc' },
       });
@@ -48,8 +57,11 @@ export async function POST(request: Request) {
     }
 
     if (type === 'clients') {
+      const where: Record<string, unknown> = { active: true };
+      if (archiiTenantId) where.archiiTenantId = archiiTenantId;
+
       const clients = await db.client.findMany({
-        where: { active: true },
+        where,
         include: { _count: { select: { quotations: true } } },
         orderBy: { name: 'asc' },
       });

@@ -19,6 +19,7 @@ export async function PUT(
         email: body.email || null,
         address: body.address || null,
         active: body.active,
+        ...(body.archiiTenantId !== undefined && { archiiTenantId: body.archiiTenantId || null }),
       },
     });
 

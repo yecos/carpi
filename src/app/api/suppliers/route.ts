@@ -1,11 +1,17 @@
 import { db } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
-// GET /api/suppliers
-export async function GET() {
+// GET /api/suppliers?archiiTenantId=xxx
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const archiiTenantId = searchParams.get('archiiTenantId') || undefined;
+
+    const where: Record<string, unknown> = { active: true };
+    if (archiiTenantId) where.archiiTenantId = archiiTenantId;
+
     const suppliers = await db.supplier.findMany({
-      where: { active: true },
+      where,
       include: {
         _count: { select: { materials: true } },
       },
@@ -23,6 +29,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const archiiTenantId = body.archiiTenantId || undefined;
 
     const supplier = await db.supplier.create({
       data: {
@@ -32,6 +39,7 @@ export async function POST(request: Request) {
         email: body.email || null,
         address: body.address || null,
         active: body.active !== false,
+        archiiTenantId: archiiTenantId || null,
       },
     });
 

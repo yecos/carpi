@@ -36,6 +36,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import { formatCOP, formatDate, QUOTATION_STATUS } from '@/lib/format';
+import { useTenantFetch } from '@/lib/use-tenant-fetch';
 import { QuotationBuilder } from './quotation-builder';
 import { QuotationDetail } from './quotation-detail';
 
@@ -71,6 +72,7 @@ interface Quotation {
 type ViewMode = 'list' | 'create' | 'detail' | 'edit';
 
 export function QuotationsView() {
+  const { tenantFetch } = useTenantFetch();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -84,7 +86,7 @@ export function QuotationsView() {
   const loadQuotations = useCallback(async () => {
     try {
       const url = statusFilter !== 'all' ? `/api/quotations?status=${statusFilter}` : '/api/quotations';
-      const res = await fetch(url);
+      const res = await tenantFetch(url);
       const data = await res.json();
       setQuotations(data);
     } catch (error) {
@@ -93,7 +95,7 @@ export function QuotationsView() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, tenantFetch]);
 
   useEffect(() => {
     loadQuotations();
@@ -125,7 +127,7 @@ export function QuotationsView() {
 
       if (editingQuotation) {
         // Update existing quotation
-        await fetch(`/api/quotations/${editingQuotation.id}`, {
+        await tenantFetch(`/api/quotations/${editingQuotation.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -142,7 +144,7 @@ export function QuotationsView() {
         toast.success('Cotización actualizada exitosamente');
       } else {
         // Create new quotation
-        await fetch('/api/quotations', {
+        await tenantFetch('/api/quotations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -171,7 +173,7 @@ export function QuotationsView() {
 
   async function handleDelete(quotation: Quotation) {
     try {
-      await fetch(`/api/quotations/${quotation.id}`, { method: 'DELETE' });
+      await tenantFetch(`/api/quotations/${quotation.id}`, { method: 'DELETE' });
       toast.success('Cotización eliminada');
       setDeleteConfirm(null);
       loadQuotations();
@@ -184,7 +186,7 @@ export function QuotationsView() {
   async function handleDuplicate(quotation: Quotation) {
     setDuplicating(quotation.id);
     try {
-      await fetch(`/api/quotations/${quotation.id}/duplicate`, { method: 'POST' });
+      await tenantFetch(`/api/quotations/${quotation.id}/duplicate`, { method: 'POST' });
       toast.success('Cotización duplicada');
       loadQuotations();
     } catch (error) {
@@ -197,7 +199,7 @@ export function QuotationsView() {
 
   async function handleDownloadPdf(quotation: Quotation) {
     try {
-      const res = await fetch(`/api/quotations/${quotation.id}/pdf`, { method: 'POST' });
+      const res = await tenantFetch(`/api/quotations/${quotation.id}/pdf`, { method: 'POST' });
       const html = await res.text();
       const printWindow = window.open('', '_blank');
       if (printWindow) {
@@ -213,7 +215,7 @@ export function QuotationsView() {
 
   async function viewQuotation(id: string) {
     try {
-      const res = await fetch(`/api/quotations/${id}`);
+      const res = await tenantFetch(`/api/quotations/${id}`);
       const data = await res.json();
       setSelectedQuotation(data);
       setViewMode('detail');

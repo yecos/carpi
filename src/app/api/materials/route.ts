@@ -1,16 +1,20 @@
 import { db } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
-// GET /api/materials?category=TABLERO
+// GET /api/materials?category=TABLERO&archiiTenantId=xxx
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
     const activeOnly = searchParams.get('active') !== 'false';
+    const archiiTenantId = searchParams.get('archiiTenantId') || undefined;
 
     const where: Record<string, unknown> = {};
     if (category) where.category = category;
     if (activeOnly) where.active = true;
+    if (archiiTenantId) {
+      where.archiiTenantId = archiiTenantId;
+    }
 
     const materials = await db.material.findMany({
       where,
@@ -29,6 +33,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const archiiTenantId = body.archiiTenantId || undefined;
 
     const material = await db.material.create({
       data: {
@@ -45,6 +50,7 @@ export async function POST(request: Request) {
         materialType: body.materialType || null,
         active: body.active !== false,
         priceUpdatedAt: body.priceUpdatedAt ? new Date(body.priceUpdatedAt) : new Date(),
+        archiiTenantId: archiiTenantId || null,
       },
       include: { supplier: true },
     });

@@ -26,6 +26,7 @@ export async function PUT(
         materialType: body.materialType || null,
         active: body.active,
         priceUpdatedAt: body.priceUpdatedAt ? new Date(body.priceUpdatedAt) : new Date(),
+        ...(body.archiiTenantId !== undefined && { archiiTenantId: body.archiiTenantId || null }),
       },
       include: { supplier: true },
     });

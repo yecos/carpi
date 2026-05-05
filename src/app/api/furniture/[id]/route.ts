@@ -45,6 +45,7 @@ export async function PUT(
         name: body.name,
         type: body.type,
         description: body.description || null,
+        ...(body.archiiTenantId !== undefined && { archiiTenantId: body.archiiTenantId || null }),
         components: {
           create: (body.components || []).map(
             (c: Record<string, unknown>, i: number) => ({

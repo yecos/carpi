@@ -15,15 +15,16 @@ datasource db {
 // CLIENTES
 // ============================================
 model Client {
-  id        String   @id @default(cuid())
-  name      String
-  phone     String?
-  email     String?
-  address   String?
-  notes     String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  phone           String?
+  email           String?
+  address         String?
+  notes           String?
+  active          Boolean  @default(true)
+  archiiTenantId  String?  // Multi-tenant isolation from Archii
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   quotations Quotation[]
 }
@@ -32,15 +33,16 @@ model Client {
 // PROVEEDORES
 // ============================================
 model Supplier {
-  id        String   @id @default(cuid())
-  name      String
-  contact   String?
-  phone     String?
-  email     String?
-  address   String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  contact         String?
+  phone           String?
+  email           String?
+  address         String?
+  active          Boolean  @default(true)
+  archiiTenantId  String?  // Multi-tenant isolation from Archii
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   materials Material[]
 }
@@ -58,25 +60,26 @@ enum MaterialCategory {
 }
 
 model Material {
-  id           String           @id @default(cuid())
-  name         String
-  category     MaterialCategory
-  unit         String           // m2, ml, unidad, hora
-  price        Float            // precio por unidad
-  supplierId   String?
-  supplier     Supplier?        @relation(fields: [supplierId], references: [id])
-  notes        String?
-  active       Boolean          @default(true)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  priceUpdatedAt DateTime?
+  id              String           @id @default(cuid())
+  name            String
+  category        MaterialCategory
+  unit            String           // m2, ml, unidad, hora
+  price           Float            // precio por unidad
+  supplierId      String?
+  supplier        Supplier?        @relation(fields: [supplierId], references: [id])
+  notes           String?
+  active          Boolean          @default(true)
+  archiiTenantId  String?          // Multi-tenant isolation from Archii
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  priceUpdatedAt  DateTime?
 
   // Propiedades específicas por categoría
-  thickness    Float?           // mm (para tableros)
-  width        Float?           // mm (para tableros/cantos)
-  length       Float?           // mm (para tableros/cantos)
-  color        String?          // color/acabado
-  materialType String?          // MDF, Melamina, Madera, etc.
+  thickness       Float?           // mm (para tableros)
+  width           Float?           // mm (para tableros/cantos)
+  length          Float?           // mm (para tableros/cantos)
+  color           String?          // color/acabado
+  materialType    String?          // MDF, Melamina, Madera, etc.
 
   furnitureComponents FurnitureComponent[]
   quotationItems     QuotationItem[]
@@ -97,14 +100,15 @@ enum FurnitureType {
 }
 
 model FurnitureTemplate {
-  id          String        @id @default(cuid())
-  name        String
-  type        FurnitureType
-  description String?
-  image       String?
-  active      Boolean       @default(true)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id              String        @id @default(cuid())
+  name            String
+  type            FurnitureType
+  description     String?
+  image           String?
+  active          Boolean       @default(true)
+  archiiTenantId  String?       // Multi-tenant isolation from Archii
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   components     FurnitureComponent[]
   quotationItems QuotationItem[]
@@ -134,19 +138,23 @@ model FurnitureComponent {
 // COTIZACIONES
 // ============================================
 model Quotation {
-  id            String   @id @default(cuid())
-  clientName    String
-  clientId      String?
-  client        Client?  @relation(fields: [clientId], references: [id])
-  project       String
-  location      String?
-  notes         String?
-  subtotal      Float    @default(0)
-  margin        Float    @default(25)  // porcentaje de margen
-  total         Float    @default(0)
-  status        String   @default("BORRADOR") // BORRADOR, ENVIADA, APROBADA, RECHAZADA
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String   @id @default(cuid())
+  clientName        String
+  clientId          String?
+  client            Client?  @relation(fields: [clientId], references: [id])
+  project           String
+  location          String?
+  notes             String?
+  subtotal          Float    @default(0)
+  margin            Float    @default(25)  // porcentaje de margen
+  total             Float    @default(0)
+  status            String   @default("BORRADOR") // BORRADOR, ENVIADA, APROBADA, RECHAZADA
+  archiiTenantId    String?  // Multi-tenant isolation from Archii
+  archiiProjectId   String?  // Links quotation to a specific Archii project
+  archiiSyncedAt    DateTime? // Tracks when quotation was synced to Archii
+  archiiWebhookId   String?  // Tracks webhook delivery status
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   items QuotationItem[]
 }

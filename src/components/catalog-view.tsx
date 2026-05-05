@@ -46,6 +46,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { FURNITURE_TYPES, MATERIAL_CATEGORIES } from '@/lib/format';
+import { useTenantFetch } from '@/lib/use-tenant-fetch';
 
 interface FurnitureComponent {
   id?: string;
@@ -80,6 +81,7 @@ interface Material {
 }
 
 export function CatalogView() {
+  const { tenantFetch } = useTenantFetch();
   const [templates, setTemplates] = useState<FurnitureTemplate[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,7 +106,7 @@ export function CatalogView() {
   const loadTemplates = useCallback(async () => {
     try {
       const url = typeFilter !== 'all' ? `/api/furniture?type=${typeFilter}` : '/api/furniture';
-      const res = await fetch(url);
+      const res = await tenantFetch(url);
       const data = await res.json();
       setTemplates(data);
     } catch (error) {
@@ -113,17 +115,17 @@ export function CatalogView() {
     } finally {
       setLoading(false);
     }
-  }, [typeFilter]);
+  }, [typeFilter, tenantFetch]);
 
   const loadMaterials = useCallback(async () => {
     try {
-      const res = await fetch('/api/materials');
+      const res = await tenantFetch('/api/materials');
       const data = await res.json();
       setMaterials(data);
     } catch (error) {
       console.error('Error loading materials:', error);
     }
-  }, []);
+  }, [tenantFetch]);
 
   useEffect(() => {
     loadTemplates();
@@ -252,14 +254,14 @@ export function CatalogView() {
       };
 
       if (editingTemplate) {
-        await fetch(`/api/furniture/${editingTemplate.id}`, {
+        await tenantFetch(`/api/furniture/${editingTemplate.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
         toast.success('Plantilla actualizada');
       } else {
-        await fetch('/api/furniture', {
+        await tenantFetch('/api/furniture', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -277,7 +279,7 @@ export function CatalogView() {
 
   async function handleDelete(template: FurnitureTemplate) {
     try {
-      await fetch(`/api/furniture/${template.id}`, { method: 'DELETE' });
+      await tenantFetch(`/api/furniture/${template.id}`, { method: 'DELETE' });
       toast.success('Plantilla eliminada');
       setDeleteConfirm(null);
       loadTemplates();

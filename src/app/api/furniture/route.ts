@@ -1,14 +1,16 @@
 import { db } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
-// GET /api/furniture?type=COCINA
+// GET /api/furniture?type=COCINA&archiiTenantId=xxx
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type');
+    const archiiTenantId = searchParams.get('archiiTenantId') || undefined;
 
     const where: Record<string, unknown> = { active: true };
     if (type) where.type = type;
+    if (archiiTenantId) where.archiiTenantId = archiiTenantId;
 
     const templates = await db.furnitureTemplate.findMany({
       where,
@@ -29,12 +31,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const archiiTenantId = body.archiiTenantId || undefined;
 
     const template = await db.furnitureTemplate.create({
       data: {
         name: body.name,
         type: body.type,
         description: body.description || null,
+        archiiTenantId: archiiTenantId || null,
         components: {
           create: (body.components || []).map(
             (c: Record<string, unknown>, i: number) => ({

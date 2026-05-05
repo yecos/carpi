@@ -28,6 +28,8 @@ export async function POST(
         margin: original.margin,
         total: original.total,
         status: 'BORRADOR',
+        archiiTenantId: original.archiiTenantId,
+        archiiProjectId: original.archiiProjectId,
         items: {
           create: original.items.map((item) => ({
             templateId: item.templateId,

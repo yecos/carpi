@@ -16,6 +16,7 @@ export async function PUT(
         email: body.email || null,
         address: body.address || null,
         notes: body.notes || null,
+        ...(body.archiiTenantId !== undefined && { archiiTenantId: body.archiiTenantId || null }),
       },
     });
     return NextResponse.json(client);

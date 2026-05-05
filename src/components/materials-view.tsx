@@ -34,6 +34,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Package, Search, AlertTriangle, Download } from 'lucide-react';
 import { formatCOP, MATERIAL_CATEGORIES, UNITS, isPriceStale, formatDateRelative } from '@/lib/format';
+import { useTenantFetch } from '@/lib/use-tenant-fetch';
 
 interface Material {
   id: string;
@@ -58,6 +59,7 @@ interface Supplier {
 }
 
 export function MaterialsView() {
+  const { tenantFetch } = useTenantFetch();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +88,7 @@ export function MaterialsView() {
   const loadMaterials = useCallback(async () => {
     try {
       const url = categoryFilter !== 'all' ? `/api/materials?category=${categoryFilter}` : '/api/materials';
-      const res = await fetch(url);
+      const res = await tenantFetch(url);
       const data = await res.json();
       setMaterials(data);
     } catch (error) {
@@ -95,17 +97,17 @@ export function MaterialsView() {
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter]);
+  }, [categoryFilter, tenantFetch]);
 
   const loadSuppliers = useCallback(async () => {
     try {
-      const res = await fetch('/api/suppliers');
+      const res = await tenantFetch('/api/suppliers');
       const data = await res.json();
       setSuppliers(data);
     } catch (error) {
       console.error('Error loading suppliers:', error);
     }
-  }, []);
+  }, [tenantFetch]);
 
   useEffect(() => {
     loadMaterials();
@@ -168,14 +170,14 @@ export function MaterialsView() {
       };
 
       if (editingMaterial) {
-        await fetch(`/api/materials/${editingMaterial.id}`, {
+        await tenantFetch(`/api/materials/${editingMaterial.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
         toast.success('Material actualizado');
       } else {
-        await fetch('/api/materials', {
+        await tenantFetch('/api/materials', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -193,7 +195,7 @@ export function MaterialsView() {
 
   async function handleDelete(material: Material) {
     try {
-      await fetch(`/api/materials/${material.id}`, { method: 'DELETE' });
+      await tenantFetch(`/api/materials/${material.id}`, { method: 'DELETE' });
       toast.success('Material eliminado');
       setDeleteConfirm(null);
       loadMaterials();
@@ -205,7 +207,7 @@ export function MaterialsView() {
 
   async function handleExportExcel() {
     try {
-      const res = await fetch('/api/export/excel', {
+      const res = await tenantFetch('/api/export/excel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'materials' }),

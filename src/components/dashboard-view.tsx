@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { formatCOP, formatDate, QUOTATION_STATUS, FURNITURE_TYPES } from '@/lib/format';
 import type { Section } from './app-sidebar';
+import { useTenantFetch } from '@/lib/use-tenant-fetch';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 interface DashboardProps {
@@ -33,6 +34,7 @@ interface QuotationSummary {
 }
 
 export function DashboardView({ onNavigate }: DashboardProps) {
+  const { tenantFetch } = useTenantFetch();
   const [stats, setStats] = useState({
     totalQuotations: 0,
     thisMonth: 0,
@@ -52,9 +54,9 @@ export function DashboardView({ onNavigate }: DashboardProps) {
   async function loadDashboard() {
     try {
       const [quotationsRes, materialsRes, clientsRes] = await Promise.all([
-        fetch('/api/quotations'),
-        fetch('/api/materials'),
-        fetch('/api/clients'),
+        tenantFetch('/api/quotations'),
+        tenantFetch('/api/materials'),
+        tenantFetch('/api/clients'),
       ]);
 
       const quotations = await quotationsRes.json();

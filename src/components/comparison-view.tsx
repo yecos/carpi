@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart3, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import { formatCOP, MATERIAL_CATEGORIES } from '@/lib/format';
+import { useTenantFetch } from '@/lib/use-tenant-fetch';
 
 interface CompareData {
   grouped: Record<string, Record<string, Array<{
@@ -20,13 +21,14 @@ interface CompareData {
 }
 
 export function ComparisonView() {
+  const { tenantFetch } = useTenantFetch();
   const [data, setData] = useState<CompareData | null>(null);
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState('all');
 
   const loadData = useCallback(async () => {
     try {
-      const res = await fetch('/api/materials/compare');
+      const res = await tenantFetch('/api/materials/compare');
       const d = await res.json();
       setData(d);
     } catch (error) {
@@ -34,7 +36,7 @@ export function ComparisonView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tenantFetch]);
 
   useEffect(() => {
     loadData();

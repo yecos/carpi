@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-export async function GET() {
+// GET /api/clients?archiiTenantId=xxx
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const archiiTenantId = searchParams.get('archiiTenantId') || undefined;
+
+    const where: Record<string, unknown> = { active: true };
+    if (archiiTenantId) where.archiiTenantId = archiiTenantId;
+
     const clients = await db.client.findMany({
-      where: { active: true },
+      where,
       include: {
         _count: { select: { quotations: true } },
       },
@@ -20,6 +27,8 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const archiiTenantId = body.archiiTenantId || undefined;
+
     const client = await db.client.create({
       data: {
         name: body.name,
@@ -27,6 +36,7 @@ export async function POST(request: Request) {
         email: body.email || null,
         address: body.address || null,
         notes: body.notes || null,
+        archiiTenantId: archiiTenantId || null,
       },
     });
     return NextResponse.json(client, { status: 201 });

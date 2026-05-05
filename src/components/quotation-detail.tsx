@@ -25,6 +25,7 @@ import {
   Download,
 } from 'lucide-react';
 import { formatCOP, formatDate, QUOTATION_STATUS } from '@/lib/format';
+import { useTenantFetch } from '@/lib/use-tenant-fetch';
 import { useState } from 'react';
 
 interface ComponentBreakdown {
@@ -83,13 +84,14 @@ interface QuotationDetailProps {
 }
 
 export function QuotationDetail({ quotation, onBack, onUpdate, onEdit, onDuplicate, onPdf }: QuotationDetailProps) {
+  const { tenantFetch } = useTenantFetch();
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const [updating, setUpdating] = useState(false);
 
   async function updateStatus(newStatus: string) {
     setUpdating(true);
     try {
-      await fetch(`/api/quotations/${quotation.id}`, {
+      await tenantFetch(`/api/quotations/${quotation.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),

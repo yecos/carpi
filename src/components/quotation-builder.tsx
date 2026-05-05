@@ -27,9 +27,12 @@ import {
   Camera,
   Sparkles,
   Check,
+  Link2,
 } from 'lucide-react';
 import { formatCOP, FURNITURE_TYPES } from '@/lib/format';
 import { PhotoAnalyzer } from './photo-analyzer';
+import { useTenantFetch } from '@/lib/use-tenant-fetch';
+import { useAuth } from '@/lib/auth-context';
 
 interface FurnitureTemplate {
   id: string;
@@ -141,6 +144,8 @@ const MATERIAL_TYPES = ['MDF', 'Melamina', 'Madera'];
 const FINISH_TYPES = ['Lacado', 'Barniz', 'Poliuretano', 'Melamina', 'Natural'];
 
 export function QuotationBuilder({ onSave, onCancel, initialData }: QuotationBuilderProps) {
+  const { tenantFetch } = useTenantFetch();
+  const { currentTenantId, archiiApiKey } = useAuth();
   const [step, setStep] = useState(1);
   const [clientName, setClientName] = useState(initialData?.clientName || '');
   const [project, setProject] = useState(initialData?.project || '');
@@ -152,10 +157,13 @@ export function QuotationBuilder({ onSave, onCancel, initialData }: QuotationBui
   const [materials, setMaterials] = useState<Material[]>([]);
   const [calculating, setCalculating] = useState<string | null>(null);
   const [showPhotoAnalyzer, setShowPhotoAnalyzer] = useState(false);
+  const [archiiProjects, setArchiiProjects] = useState<Array<{ id: string; name: string; clientName?: string; location?: string }>>([]);
+  const [selectedArchiiProject, setSelectedArchiiProject] = useState<string>('');
 
   useEffect(() => {
     loadTemplates();
     loadMaterials();
+    loadArchiiProjects();
   }, []);
 
   // Load initial items if editing
@@ -181,7 +189,7 @@ export function QuotationBuilder({ onSave, onCancel, initialData }: QuotationBui
 
   async function loadTemplates() {
     try {
-      const res = await fetch('/api/furniture');
+      const res = await tenantFetch('/api/furniture');
       const data = await res.json();
       setTemplates(data);
     } catch (error) {
@@ -191,11 +199,39 @@ export function QuotationBuilder({ onSave, onCancel, initialData }: QuotationBui
 
   async function loadMaterials() {
     try {
-      const res = await fetch('/api/materials');
+      const res = await tenantFetch('/api/materials');
       const data = await res.json();
       setMaterials(data);
     } catch (error) {
       console.error('Error loading materials:', error);
+    }
+  }
+
+  async function loadArchiiProjects() {
+    if (!currentTenantId || !archiiApiKey) return;
+    try {
+      const res = await fetch('/api/archii/projects', {
+        headers: {
+          'X-Archii-Api-Key': archiiApiKey,
+          'X-Archii-Tenant-Id': currentTenantId,
+        },
+      });
+      const data = await res.json();
+      if (data.projects) {
+        setArchiiProjects(data.projects);
+      }
+    } catch (error) {
+      console.error('Error loading Archii projects:', error);
+    }
+  }
+
+  function handleArchiiProjectSelect(projectId: string) {
+    setSelectedArchiiProject(projectId);
+    const archiiProject = archiiProjects.find(p => p.id === projectId);
+    if (archiiProject) {
+      setProject(archiiProject.name);
+      if (archiiProject.clientName) setClientName(archiiProject.clientName);
+      if (archiiProject.location) setLocation(archiiProject.location);
     }
   }
 
@@ -318,6 +354,7 @@ export function QuotationBuilder({ onSave, onCancel, initialData }: QuotationBui
       location,
       notes,
       margin,
+      archiiProjectId: selectedArchiiProject && selectedArchiiProject !== 'none' ? selectedArchiiProject : undefined,
       items: items.map((item) => ({
         templateId: item.templateId || null,
         customName: item.customName || item.templateName || null,
@@ -374,6 +411,26 @@ export function QuotationBuilder({ onSave, onCancel, initialData }: QuotationBui
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Archii Project Selector */}
+            {archiiProjects.length > 0 && (
+              <div className="grid gap-2 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-900/10">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <Link2 className="h-3.5 w-3.5 text-amber-600" />
+                  Proyecto de Archii (Opcional)
+                </Label>
+                <Select value={selectedArchiiProject} onValueChange={handleArchiiProjectSelect}>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar proyecto de Archii..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin proyecto de Archii</SelectItem>
+                    {archiiProjects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}{p.clientName ? ` — ${p.clientName}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label>Nombre del Cliente *</Label>

@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Truck, Phone, Mail, MapPin, Download, Star } from 'lucide-react';
+import { useTenantFetch } from '@/lib/use-tenant-fetch';
 
 interface Supplier {
   id: string;
@@ -38,6 +39,7 @@ interface Supplier {
 }
 
 export function SuppliersView() {
+  const { tenantFetch } = useTenantFetch();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -54,7 +56,7 @@ export function SuppliersView() {
 
   const loadSuppliers = useCallback(async () => {
     try {
-      const res = await fetch('/api/suppliers');
+      const res = await tenantFetch('/api/suppliers');
       const data = await res.json();
       setSuppliers(data);
     } catch (error) {
@@ -63,7 +65,7 @@ export function SuppliersView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tenantFetch]);
 
   useEffect(() => {
     loadSuppliers();
@@ -103,14 +105,14 @@ export function SuppliersView() {
       };
 
       if (editingSupplier) {
-        await fetch(`/api/suppliers/${editingSupplier.id}`, {
+        await tenantFetch(`/api/suppliers/${editingSupplier.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...payload, active: true }),
         });
         toast.success('Proveedor actualizado');
       } else {
-        await fetch('/api/suppliers', {
+        await tenantFetch('/api/suppliers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -128,7 +130,7 @@ export function SuppliersView() {
 
   async function handleDelete(supplier: Supplier) {
     try {
-      await fetch(`/api/suppliers/${supplier.id}`, { method: 'DELETE' });
+      await tenantFetch(`/api/suppliers/${supplier.id}`, { method: 'DELETE' });
       toast.success('Proveedor eliminado');
       setDeleteConfirm(null);
       loadSuppliers();
@@ -140,7 +142,7 @@ export function SuppliersView() {
 
   async function handleExportExcel() {
     try {
-      const res = await fetch('/api/export/excel', {
+      const res = await tenantFetch('/api/export/excel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'materials' }),
