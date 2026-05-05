@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
 // POST /api/analyze-furniture
-// Analyzes a furniture photo using AI Vision and returns structured data
-// Works with both local dev (Z AI internal API) and Vercel (when API is reachable)
+// Analyzes a furniture photo using Google Gemini Vision API
+// Works on both local dev and Vercel (public API endpoint)
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -15,16 +15,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get API configuration from environment variables
-    const zaiBaseUrl = process.env.ZAI_BASE_URL;
-    const zaiApiKey = process.env.ZAI_API_KEY;
-    const zaiToken = process.env.ZAI_TOKEN;
+    // Get Gemini API key
+    const geminiApiKey = process.env.GEMINI_API_KEY;
 
-    if (!zaiBaseUrl || !zaiApiKey) {
-      console.error('Z AI Vision API not configured.');
+    if (!geminiApiKey) {
+      console.error('Gemini API key not configured. Set GEMINI_API_KEY env var.');
       return NextResponse.json(
         {
-          error: 'Servicio de IA no configurado.',
+          error: 'Servicio de IA no configurado. Configure la variable de entorno GEMINI_API_KEY.',
           code: 'AI_NOT_CONFIGURED',
         },
         { status: 503 }
@@ -73,60 +71,73 @@ REGLAS IMPORTANTES:
 - Identifica herrajes visibles: bisagras, tiradores, correderas
 - El campo confidence indica qué tan seguro estás de las estimaciones`;
 
-    // Build the vision API request body
-    const visionRequestBody = {
-      model: process.env.ZAI_VISION_MODEL || 'glm-4v-flash',
-      messages: [
+    // Parse the base64 image data to extract mime type and raw base64
+    let mimeType = 'image/jpeg';
+    let base64Data = image;
+
+    if (image.startsWith('data:')) {
+      const matches = image.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
+      if (matches) {
+        mimeType = matches[1];
+        base64Data = matches[2];
+      }
+    }
+
+    // Gemini API request body
+    const geminiRequestBody = {
+      contents: [
         {
-          role: 'user',
-          content: [
+          parts: [
+            { text: prompt },
             {
-              type: 'text',
-              text: prompt,
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: image,
+              inline_data: {
+                mime_type: mimeType,
+                data: base64Data,
               },
             },
           ],
         },
       ],
-      thinking: { type: 'disabled' },
+      generationConfig: {
+        temperature: 0.2,
+        topP: 0.8,
+        maxOutputTokens: 2048,
+      },
     };
 
-    // Make direct HTTP request to the Z AI Vision API
-    const apiUrl = `${zaiBaseUrl}/chat/completions/vision`;
-    const reqHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${zaiApiKey}`,
-      'X-Z-AI-From': 'Z',
-    };
-    if (zaiToken) {
-      reqHeaders['X-Token'] = zaiToken;
-    }
+    // Call Gemini API
+    const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
 
     let apiResponse: Response;
     try {
-      apiResponse = await fetch(apiUrl, {
+      apiResponse = await fetch(geminiUrl, {
         method: 'POST',
-        headers: reqHeaders,
-        body: JSON.stringify(visionRequestBody),
-        signal: AbortSignal.timeout(30000), // 30 second timeout
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(geminiRequestBody),
+        signal: AbortSignal.timeout(60000), // 60 second timeout for vision
       });
     } catch (fetchError: unknown) {
-      // Handle connection errors (unreachable API, timeout, etc.)
       const errorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
       const isTimeout = errorMsg.includes('timeout') || errorMsg.includes('Timeout') || errorMsg.includes('abort');
       const isConnectionRefused = errorMsg.includes('ECONNREFUSED') || errorMsg.includes('fetch failed') || errorMsg.includes('ENOTFOUND');
 
-      console.error('Vision API connection error:', errorMsg);
+      console.error('Gemini API connection error:', errorMsg);
 
-      if (isTimeout || isConnectionRefused) {
+      if (isTimeout) {
         return NextResponse.json(
           {
-            error: 'El servicio de IA no está disponible en este momento. La función de análisis por foto está disponible solo en modo de desarrollo local.',
+            error: 'El análisis está demorando demasiado. Intente de nuevo.',
+            code: 'AI_TIMEOUT',
+          },
+          { status: 504 }
+        );
+      }
+
+      if (isConnectionRefused) {
+        return NextResponse.json(
+          {
+            error: 'No se pudo conectar con el servicio de IA. Verifique su conexión a internet.',
             code: 'AI_SERVICE_UNREACHABLE',
           },
           { status: 503 }
@@ -135,7 +146,7 @@ REGLAS IMPORTANTES:
 
       return NextResponse.json(
         {
-          error: 'Error de conexión con el servicio de IA. Intente de nuevo más tarde.',
+          error: 'Error de conexión con el servicio de IA.',
           code: 'AI_CONNECTION_ERROR',
         },
         { status: 502 }
@@ -144,16 +155,35 @@ REGLAS IMPORTANTES:
 
     if (!apiResponse.ok) {
       const errorBody = await apiResponse.text();
-      console.error('Vision API error:', apiResponse.status, errorBody);
+      console.error('Gemini API error:', apiResponse.status, errorBody);
 
-      // Check for token-related errors
-      if (apiResponse.status === 401 || errorBody.includes('X-Token')) {
+      if (apiResponse.status === 400) {
         return NextResponse.json(
           {
-            error: 'Error de autenticación con el servicio de IA. Verifique la configuración del token.',
+            error: 'La imagen no es válida o el formato no es compatible. Intente con otra imagen.',
+            code: 'AI_INVALID_IMAGE',
+          },
+          { status: 400 }
+        );
+      }
+
+      if (apiResponse.status === 403) {
+        return NextResponse.json(
+          {
+            error: 'La API key de Gemini no es válida o ha expirado. Contacte al administrador.',
             code: 'AI_AUTH_ERROR',
           },
           { status: 502 }
+        );
+      }
+
+      if (apiResponse.status === 429) {
+        return NextResponse.json(
+          {
+            error: 'Se ha excedido la cuota de uso de la IA. Espere unos minutos e intente de nuevo.',
+            code: 'AI_QUOTA_EXCEEDED',
+          },
+          { status: 429 }
         );
       }
 
@@ -167,9 +197,22 @@ REGLAS IMPORTANTES:
     }
 
     const response = await apiResponse.json();
-    const content = response.choices?.[0]?.message?.content;
+
+    // Extract text from Gemini response
+    const content = response.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!content) {
+      // Check for safety filter blocks
+      const finishReason = response.candidates?.[0]?.finishReason;
+      if (finishReason === 'SAFETY') {
+        return NextResponse.json(
+          {
+            error: 'La imagen fue bloqueada por los filtros de seguridad. Intente con otra imagen.',
+            code: 'AI_SAFETY_BLOCK',
+          },
+          { status: 400 }
+        );
+      }
       return NextResponse.json(
         {
           error: 'La IA no devolvió una respuesta válida. Intente de nuevo.',
@@ -182,15 +225,13 @@ REGLAS IMPORTANTES:
     // Try to parse the JSON response from the AI
     let parsed;
     try {
-      // Clean the response - remove markdown code blocks if present
       const cleaned = content
         .replace(/```json\s*/g, '')
         .replace(/```\s*/g, '')
         .trim();
       parsed = JSON.parse(cleaned);
     } catch {
-      // If JSON parsing fails, return the raw content with a retry suggestion
-      console.error('Failed to parse AI response as JSON:', content);
+      console.error('Failed to parse Gemini response as JSON:', content);
       return NextResponse.json({
         success: false,
         rawResponse: content,

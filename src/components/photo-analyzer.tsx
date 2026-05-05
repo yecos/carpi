@@ -116,13 +116,17 @@ export function PhotoAnalyzer({ templates, onAnalysisComplete, onCancel }: Photo
       if (!data.success) {
         // Map error codes to user-friendly messages
         const errorMessages: Record<string, string> = {
-          'AI_NOT_CONFIGURED': 'El servicio de IA no está configurado. Contacte al administrador.',
-          'AI_SERVICE_UNREACHABLE': 'El servicio de IA no está disponible en este momento. El análisis por foto funciona en modo de desarrollo local.',
+          'AI_NOT_CONFIGURED': 'El servicio de IA no está configurado. Configure la API Key de Gemini.',
+          'AI_SERVICE_UNREACHABLE': 'No se pudo conectar con Google Gemini. Verifique su conexión a internet.',
           'AI_CONNECTION_ERROR': 'No se pudo conectar con el servicio de IA. Verifique su conexión a internet.',
-          'AI_AUTH_ERROR': 'Error de autenticación con el servicio de IA. Contacte al administrador.',
+          'AI_AUTH_ERROR': 'La API Key de Gemini no es válida o ha expirado. Configure una clave válida.',
           'AI_API_ERROR': 'El servicio de IA respondió con un error. Intente de nuevo más tarde.',
           'AI_EMPTY_RESPONSE': 'La IA no pudo analizar esta imagen. Intente con otra foto.',
           'AI_PARSE_ERROR': 'La IA devolvió un formato inesperado. Intente de nuevo.',
+          'AI_TIMEOUT': 'El análisis está demorando demasiado. Intente de nuevo.',
+          'AI_QUOTA_EXCEEDED': 'Se ha excedido la cuota de uso de la IA. Espere unos minutos e intente de nuevo.',
+          'AI_INVALID_IMAGE': 'La imagen no es válida o el formato no es compatible. Intente con otra imagen.',
+          'AI_SAFETY_BLOCK': 'La imagen fue bloqueada por los filtros de seguridad. Intente con otra foto.',
         };
         const errorMsg = errorMessages[data.code] || data.error || data.rawResponse || 'Error al analizar la imagen';
         setError(errorMsg);
