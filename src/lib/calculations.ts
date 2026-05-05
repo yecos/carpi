@@ -296,3 +296,173 @@ export function calculateQuotationItem(
     subtotal: totalMaterialCost + totalEdgeCost + totalHardwareCost + totalLaborCost,
   };
 }
+
+/**
+ * Generic estimate calculation when no template is available.
+ * Uses standard furniture component ratios for Colombian carpentry.
+ * This gives a rough estimate based on dimensions + material type.
+ */
+export function calculateGenericEstimate(
+  materials: MaterialPrice[],
+  width: number,
+  height: number,
+  depth: number,
+  materialType?: string,
+  furnitureType?: string
+): CalculationResult {
+  const laborRate = findMaterial(materials, 'MANO_OBRA')?.price ?? 18000;
+  const w = width / 1000; // Convert to meters
+  const h = height / 1000;
+  const d = depth / 1000;
+
+  // Standard component ratios for different furniture types
+  const componentRatios: Record<string, Array<{ name: string; qty: number; areaRatio: number; needsEdge: boolean; edgeSides: number; laborH: number }>> = {
+    COCINA: [
+      { name: 'Lateral', qty: 2, areaRatio: 0.85, needsEdge: true, edgeSides: 2, laborH: 0.5 },
+      { name: 'Fondo', qty: 1, areaRatio: 0.75, needsEdge: false, edgeSides: 0, laborH: 0.3 },
+      { name: 'Base/Piso', qty: 1, areaRatio: 0.8, needsEdge: true, edgeSides: 2, laborH: 0.3 },
+      { name: 'Tapa superior', qty: 1, areaRatio: 0.8, needsEdge: true, edgeSides: 2, laborH: 0.2 },
+      { name: 'Puerta', qty: 1, areaRatio: 0.9, needsEdge: true, edgeSides: 2, laborH: 1.0 },
+      { name: 'Repisa interior', qty: 1, areaRatio: 0.7, needsEdge: true, edgeSides: 1, laborH: 0.2 },
+    ],
+    CLOSET: [
+      { name: 'Lateral', qty: 2, areaRatio: 0.95, needsEdge: true, edgeSides: 2, laborH: 0.5 },
+      { name: 'Fondo', qty: 1, areaRatio: 0.85, needsEdge: false, edgeSides: 0, laborH: 0.4 },
+      { name: 'Tapa superior', qty: 1, areaRatio: 0.8, needsEdge: true, edgeSides: 2, laborH: 0.2 },
+      { name: 'Base', qty: 1, areaRatio: 0.8, needsEdge: true, edgeSides: 2, laborH: 0.2 },
+      { name: 'Repisas', qty: 3, areaRatio: 0.7, needsEdge: true, edgeSides: 1, laborH: 0.2 },
+      { name: 'Puerta', qty: 2, areaRatio: 0.85, needsEdge: true, edgeSides: 2, laborH: 1.5 },
+      { name: 'Entrepaño', qty: 1, areaRatio: 0.7, needsEdge: true, edgeSides: 2, laborH: 0.3 },
+    ],
+    BANO: [
+      { name: 'Lateral', qty: 2, areaRatio: 0.85, needsEdge: true, edgeSides: 2, laborH: 0.5 },
+      { name: 'Fondo', qty: 1, areaRatio: 0.8, needsEdge: false, edgeSides: 0, laborH: 0.3 },
+      { name: 'Base', qty: 1, areaRatio: 0.75, needsEdge: true, edgeSides: 2, laborH: 0.3 },
+      { name: 'Tapa', qty: 1, areaRatio: 0.75, needsEdge: true, edgeSides: 2, laborH: 0.2 },
+      { name: 'Puerta', qty: 1, areaRatio: 0.85, needsEdge: true, edgeSides: 2, laborH: 1.0 },
+      { name: 'Repisa', qty: 1, areaRatio: 0.6, needsEdge: true, edgeSides: 1, laborH: 0.2 },
+    ],
+    SALA: [
+      { name: 'Lateral', qty: 2, areaRatio: 0.7, needsEdge: true, edgeSides: 2, laborH: 0.5 },
+      { name: 'Fondo', qty: 1, areaRatio: 0.8, needsEdge: false, edgeSides: 0, laborH: 0.3 },
+      { name: 'Tapa superior', qty: 1, areaRatio: 0.85, needsEdge: true, edgeSides: 2, laborH: 0.2 },
+      { name: 'Base', qty: 1, areaRatio: 0.85, needsEdge: true, edgeSides: 2, laborH: 0.3 },
+      { name: 'Repisas', qty: 2, areaRatio: 0.75, needsEdge: true, edgeSides: 1, laborH: 0.2 },
+      { name: 'Puerta', qty: 2, areaRatio: 0.7, needsEdge: true, edgeSides: 2, laborH: 1.0 },
+    ],
+    OFICINA: [
+      { name: 'Lateral', qty: 2, areaRatio: 0.9, needsEdge: true, edgeSides: 2, laborH: 0.5 },
+      { name: 'Fondo', qty: 1, areaRatio: 0.85, needsEdge: false, edgeSides: 0, laborH: 0.3 },
+      { name: 'Tapa', qty: 1, areaRatio: 0.85, needsEdge: true, edgeSides: 2, laborH: 0.2 },
+      { name: 'Base', qty: 1, areaRatio: 0.8, needsEdge: true, edgeSides: 2, laborH: 0.2 },
+      { name: 'Repisas', qty: 4, areaRatio: 0.75, needsEdge: true, edgeSides: 1, laborH: 0.2 },
+    ],
+  };
+
+  // Default to COCINA components if type not found
+  const components = componentRatios[furnitureType || 'COCINA'] || componentRatios.COCINA;
+
+  const breakdowns: ComponentBreakdown[] = [];
+  let totalMaterialCost = 0;
+  let totalEdgeCost = 0;
+  let totalHardwareCost = 0;
+  let totalLaborCost = 0;
+
+  // Find board material
+  const boardMaterial = findMaterial(materials, 'TABLERO', materialType);
+  const edgeMaterial = findMaterial(materials, 'CANTO');
+
+  for (const comp of components) {
+    // Estimate component dimensions based on furniture dimensions and ratio
+    // Lateral: h × d, Fondo: w × h, Tapa/Base: w × d, Puerta: w × h, Repisa: w × d
+    let compWidthMm: number, compHeightMm: number;
+    if (comp.name.includes('Lateral') || comp.name.includes('Entrepaño')) {
+      compWidthMm = depth || 580;
+      compHeightMm = height;
+    } else if (comp.name.includes('Fondo')) {
+      compWidthMm = width;
+      compHeightMm = height;
+    } else if (comp.name.includes('Tapa') || comp.name.includes('Base') || comp.name.includes('Repisa')) {
+      compWidthMm = width;
+      compHeightMm = depth || 580;
+    } else if (comp.name.includes('Puerta')) {
+      compWidthMm = comp.qty > 1 ? width / 2 - 2 : width; // Split doors
+      compHeightMm = height;
+    } else {
+      compWidthMm = width * 0.8;
+      compHeightMm = (depth || 580) * 0.8;
+    }
+
+    // Apply area ratio (accounts for smaller actual piece vs furniture dimension)
+    const areaM2 = calculateBoardArea(
+      compWidthMm * comp.areaRatio,
+      compHeightMm * comp.areaRatio,
+      comp.qty
+    );
+
+    let materialCost = 0;
+    let edgeCost = 0;
+    let hardwareCost = 0;
+    let laborCost = 0;
+    const details: ComponentBreakdown['details'] = {};
+
+    // Material cost
+    if (boardMaterial) {
+      materialCost = areaM2 * boardMaterial.price;
+      details.areaM2 = areaM2;
+      details.materialUsed = boardMaterial.name;
+      details.materialPrice = boardMaterial.price;
+    }
+
+    // Edge cost
+    if (comp.needsEdge && comp.edgeSides > 0 && edgeMaterial) {
+      let edgeLinearMm = 0;
+      if (comp.edgeSides === 1) edgeLinearMm = Math.max(compWidthMm, compHeightMm);
+      else if (comp.edgeSides === 2) edgeLinearMm = compWidthMm + compHeightMm;
+      else edgeLinearMm = 2 * compWidthMm + 2 * compHeightMm;
+
+      const edgeLinearM = (edgeLinearMm / 1000) * comp.qty;
+      edgeCost = edgeLinearM * edgeMaterial.price;
+      details.edgeLinearM = edgeLinearM;
+    }
+
+    // Hardware estimate (basic: hinges + drawer slides if applicable)
+    if (comp.name.includes('Puerta')) {
+      const hinge = findMaterial(materials, 'HERRAJE', 'bisagra');
+      if (hinge) {
+        hardwareCost += comp.qty * 2 * hinge.price; // 2 hinges per door
+      }
+    }
+
+    // Labor
+    laborCost = comp.laborH * comp.qty * laborRate;
+
+    const subtotal = materialCost + edgeCost + hardwareCost + laborCost;
+    totalMaterialCost += materialCost;
+    totalEdgeCost += edgeCost;
+    totalHardwareCost += hardwareCost;
+    totalLaborCost += laborCost;
+
+    breakdowns.push({
+      componentName: comp.name,
+      quantity: comp.qty,
+      widthMm: Math.round(compWidthMm),
+      heightMm: Math.round(compHeightMm),
+      materialCost: Math.round(materialCost),
+      edgeCost: Math.round(edgeCost),
+      hardwareCost: Math.round(hardwareCost),
+      laborCost: Math.round(laborCost),
+      subtotal: Math.round(subtotal),
+      details,
+    });
+  }
+
+  return {
+    components: breakdowns,
+    totalMaterialCost: Math.round(totalMaterialCost),
+    totalEdgeCost: Math.round(totalEdgeCost),
+    totalHardwareCost: Math.round(totalHardwareCost),
+    totalLaborCost: Math.round(totalLaborCost),
+    subtotal: Math.round(totalMaterialCost + totalEdgeCost + totalHardwareCost + totalLaborCost),
+  };
+}

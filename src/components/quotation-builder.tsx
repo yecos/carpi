@@ -237,7 +237,10 @@ export function QuotationBuilder({ onSave, onCancel, initialData }: QuotationBui
 
   async function calculateItem(index: number) {
     const item = items[index];
-    if (!item.templateId || !item.width || !item.height) return;
+    if (!item.width || !item.height) {
+      toast.error('Ingrese ancho y alto');
+      return;
+    }
 
     setCalculating(item.templateId + index);
 
@@ -246,16 +249,22 @@ export function QuotationBuilder({ onSave, onCancel, initialData }: QuotationBui
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          templateId: item.templateId,
+          templateId: item.templateId || undefined,
           width: item.width,
           height: item.height,
           depth: item.depth || 0,
           materialType: item.materialType || undefined,
           finishType: item.finishType || undefined,
+          furnitureType: item.templateName || undefined,
         }),
       });
 
       const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || 'Error al calcular');
+        return;
+      }
 
       const updatedItems = [...items];
       updatedItems[index] = {
@@ -263,9 +272,10 @@ export function QuotationBuilder({ onSave, onCancel, initialData }: QuotationBui
         subtotal: data.subtotal,
         breakdown: data.components,
         totalSubtotal: data.subtotal * item.quantity,
+        templateName: data.templateName || item.templateName,
       };
       setItems(updatedItems);
-      toast.success('Cálculo realizado');
+      toast.success(data.estimated ? 'Cálculo estimado realizado' : 'Cálculo realizado');
     } catch (error) {
       console.error('Error calculating:', error);
       toast.error('Error al calcular');
@@ -636,7 +646,7 @@ export function QuotationBuilder({ onSave, onCancel, initialData }: QuotationBui
                       <Button
                         onClick={() => calculateItem(index)}
                         className="w-full gradient-amber hover:opacity-90 text-white border-0"
-                        disabled={!item.templateId || !item.width || !item.height || !!calculating}
+                        disabled={!item.width || !item.height || !!calculating}
                       >
                         {calculating === item.templateId + index ? (
                           <span className="animate-pulse">Calculando...</span>

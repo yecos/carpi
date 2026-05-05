@@ -174,12 +174,26 @@ export function PhotoAnalyzer({ templates, onAnalysisComplete, onCancel }: Photo
   function applyAnalysis() {
     if (!result) return;
 
-    // Find matching template
-    const matchingTemplate = templates.find(
-      (t) =>
-        t.name.toLowerCase().includes(result.suggestedTemplate?.toLowerCase()) ||
-        result.suggestedTemplate?.toLowerCase().includes(t.name.toLowerCase())
-    );
+    // Find matching template — improved fuzzy matching
+    const suggestedName = result.suggestedTemplate?.toLowerCase() || '';
+    const suggestedType = result.furnitureType?.toLowerCase() || '';
+    
+    const matchingTemplate = templates.find((t) => {
+      const tName = t.name.toLowerCase();
+      const tType = t.type.toLowerCase();
+      // Direct name match
+      if (tName.includes(suggestedName) || suggestedName.includes(tName)) return true;
+      // Type + keyword match (e.g., COCINA + "base" → "Módulo Cocina Base")
+      if (suggestedType && tType === suggestedType) {
+        if (suggestedName.includes('base') && tName.includes('base')) return true;
+        if (suggestedName.includes('alto') && tName.includes('alto')) return true;
+        if (suggestedName.includes('closet') && tName.includes('closet')) return true;
+        if (suggestedName.includes('vanidad') && tName.includes('vanidad')) return true;
+        if (suggestedName.includes('tv') && tName.includes('tv')) return true;
+        if (suggestedName.includes('estanter') && tName.includes('estanter')) return true;
+      }
+      return false;
+    }) || templates.find((t) => t.type.toLowerCase() === suggestedType) || null;
 
     onAnalysisComplete({
       templateId: matchingTemplate?.id || null,
