@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 // POST /api/analyze-furniture
 // Analyzes a furniture photo using AI Vision and returns structured data
-// Uses direct fetch to the Z AI Vision API (compatible with both local and Vercel)
+// Works with both local dev (Z AI internal API) and Vercel (when API is reachable)
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -21,10 +21,10 @@ export async function POST(request: Request) {
     const zaiToken = process.env.ZAI_TOKEN;
 
     if (!zaiBaseUrl || !zaiApiKey) {
-      console.error('Z AI Vision API not configured. Set ZAI_BASE_URL and ZAI_API_KEY env vars.');
+      console.error('Z AI Vision API not configured.');
       return NextResponse.json(
         {
-          error: 'Servicio de IA no configurado. Configure las variables de entorno ZAI_BASE_URL y ZAI_API_KEY.',
+          error: 'Servicio de IA no configurado.',
           code: 'AI_NOT_CONFIGURED',
         },
         { status: 503 }
@@ -98,27 +98,69 @@ REGLAS IMPORTANTES:
 
     // Make direct HTTP request to the Z AI Vision API
     const apiUrl = `${zaiBaseUrl}/chat/completions/vision`;
-    const headers: Record<string, string> = {
+    const reqHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${zaiApiKey}`,
       'X-Z-AI-From': 'Z',
     };
     if (zaiToken) {
-      headers['X-Token'] = zaiToken;
+      reqHeaders['X-Token'] = zaiToken;
     }
-    const apiResponse = await fetch(apiUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(visionRequestBody),
-    });
+
+    let apiResponse: Response;
+    try {
+      apiResponse = await fetch(apiUrl, {
+        method: 'POST',
+        headers: reqHeaders,
+        body: JSON.stringify(visionRequestBody),
+        signal: AbortSignal.timeout(30000), // 30 second timeout
+      });
+    } catch (fetchError: unknown) {
+      // Handle connection errors (unreachable API, timeout, etc.)
+      const errorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      const isTimeout = errorMsg.includes('timeout') || errorMsg.includes('Timeout') || errorMsg.includes('abort');
+      const isConnectionRefused = errorMsg.includes('ECONNREFUSED') || errorMsg.includes('fetch failed') || errorMsg.includes('ENOTFOUND');
+
+      console.error('Vision API connection error:', errorMsg);
+
+      if (isTimeout || isConnectionRefused) {
+        return NextResponse.json(
+          {
+            error: 'El servicio de IA no está disponible en este momento. La función de análisis por foto está disponible solo en modo de desarrollo local.',
+            code: 'AI_SERVICE_UNREACHABLE',
+          },
+          { status: 503 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error: 'Error de conexión con el servicio de IA. Intente de nuevo más tarde.',
+          code: 'AI_CONNECTION_ERROR',
+        },
+        { status: 502 }
+      );
+    }
 
     if (!apiResponse.ok) {
       const errorBody = await apiResponse.text();
       console.error('Vision API error:', apiResponse.status, errorBody);
+
+      // Check for token-related errors
+      if (apiResponse.status === 401 || errorBody.includes('X-Token')) {
+        return NextResponse.json(
+          {
+            error: 'Error de autenticación con el servicio de IA. Verifique la configuración del token.',
+            code: 'AI_AUTH_ERROR',
+          },
+          { status: 502 }
+        );
+      }
+
       return NextResponse.json(
         {
           error: 'Error del servicio de IA. Intente de nuevo más tarde.',
-          details: apiResponse.status >= 500 ? 'Service temporarily unavailable' : undefined,
+          code: 'AI_API_ERROR',
         },
         { status: apiResponse.status >= 500 ? 502 : apiResponse.status }
       );
@@ -129,8 +171,11 @@ REGLAS IMPORTANTES:
 
     if (!content) {
       return NextResponse.json(
-        { error: 'No se pudo analizar la imagen' },
-        { status: 500 }
+        {
+          error: 'La IA no devolvió una respuesta válida. Intente de nuevo.',
+          code: 'AI_EMPTY_RESPONSE',
+        },
+        { status: 502 }
       );
     }
 
@@ -144,12 +189,13 @@ REGLAS IMPORTANTES:
         .trim();
       parsed = JSON.parse(cleaned);
     } catch {
-      // If JSON parsing fails, return the raw content
+      // If JSON parsing fails, return the raw content with a retry suggestion
       console.error('Failed to parse AI response as JSON:', content);
       return NextResponse.json({
         success: false,
         rawResponse: content,
         error: 'La IA no devolvió un formato válido. Intente de nuevo.',
+        code: 'AI_PARSE_ERROR',
       });
     }
 
@@ -158,9 +204,12 @@ REGLAS IMPORTANTES:
       analysis: parsed,
     });
   } catch (error) {
-    console.error('Error analyzing furniture image:', error);
+    console.error('Unexpected error analyzing furniture image:', error);
     return NextResponse.json(
-      { error: 'Error al analizar la imagen' },
+      {
+        error: 'Error inesperado al analizar la imagen. Intente de nuevo.',
+        code: 'UNEXPECTED_ERROR',
+      },
       { status: 500 }
     );
   }

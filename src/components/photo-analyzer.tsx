@@ -114,9 +114,17 @@ export function PhotoAnalyzer({ templates, onAnalysisComplete, onCancel }: Photo
       const data = await res.json();
 
       if (!data.success) {
-        const errorMsg = data.code === 'AI_NOT_CONFIGURED'
-          ? 'El servicio de IA no está configurado. Contacte al administrador.'
-          : (data.error || data.rawResponse || 'Error al analizar la imagen');
+        // Map error codes to user-friendly messages
+        const errorMessages: Record<string, string> = {
+          'AI_NOT_CONFIGURED': 'El servicio de IA no está configurado. Contacte al administrador.',
+          'AI_SERVICE_UNREACHABLE': 'El servicio de IA no está disponible en este momento. El análisis por foto funciona en modo de desarrollo local.',
+          'AI_CONNECTION_ERROR': 'No se pudo conectar con el servicio de IA. Verifique su conexión a internet.',
+          'AI_AUTH_ERROR': 'Error de autenticación con el servicio de IA. Contacte al administrador.',
+          'AI_API_ERROR': 'El servicio de IA respondió con un error. Intente de nuevo más tarde.',
+          'AI_EMPTY_RESPONSE': 'La IA no pudo analizar esta imagen. Intente con otra foto.',
+          'AI_PARSE_ERROR': 'La IA devolvió un formato inesperado. Intente de nuevo.',
+        };
+        const errorMsg = errorMessages[data.code] || data.error || data.rawResponse || 'Error al analizar la imagen';
         setError(errorMsg);
         toast.error(data.error || 'Error al analizar la imagen');
         return;
