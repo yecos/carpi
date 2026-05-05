@@ -1,13 +1,14 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// This is your Prisma schema file for PostgreSQL (Vercel/Neon)
+// This file is used during Vercel builds
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "sqlite"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================
@@ -21,7 +22,7 @@ model Client {
   address         String?
   notes           String?
   active          Boolean  @default(true)
-  archiiTenantId  String?  // Multi-tenant isolation from Archii
+  archiiTenantId  String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -39,7 +40,7 @@ model Supplier {
   email           String?
   address         String?
   active          Boolean  @default(true)
-  archiiTenantId  String?  // Multi-tenant isolation from Archii
+  archiiTenantId  String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -62,30 +63,29 @@ model Material {
   id              String           @id @default(cuid())
   name            String
   category        MaterialCategory
-  unit            String           // m2, ml, unidad, hora
-  price           Float            // precio por unidad
+  unit            String
+  price           Float
   supplierId      String?
   supplier        Supplier?        @relation(fields: [supplierId], references: [id])
   notes           String?
   active          Boolean          @default(true)
-  archiiTenantId  String?          // Multi-tenant isolation from Archii
+  archiiTenantId  String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   priceUpdatedAt  DateTime?
 
-  // Propiedades específicas por categoría
-  thickness       Float?           // mm (para tableros)
-  width           Float?           // mm (para tableros/cantos)
-  length          Float?           // mm (para tableros/cantos)
-  color           String?          // color/acabado
-  materialType    String?          // MDF, Melamina, Madera, etc.
+  thickness       Float?
+  width           Float?
+  length          Float?
+  color           String?
+  materialType    String?
 
   furnitureComponents FurnitureComponent[]
   quotationItems     QuotationItem[]
 }
 
 // ============================================
-// CATÁLOGO DE MOBILIARIO
+// CATALOGO DE MOBILIARIO
 // ============================================
 enum FurnitureType {
   COCINA
@@ -105,7 +105,7 @@ model FurnitureTemplate {
   description     String?
   image           String?
   active          Boolean       @default(true)
-  archiiTenantId  String?       // Multi-tenant isolation from Archii
+  archiiTenantId  String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -117,19 +117,19 @@ model FurnitureComponent {
   id               String           @id @default(cuid())
   templateId       String
   template         FurnitureTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  name             String            // "Puerta", "Estante", "Fondo", "Lateral", etc.
-  quantity         Float             // cantidad (1, 2, etc.)
-  widthFormula     String            // fórmula o valor fijo: "ancho - 32" o "600"
-  heightFormula    String            // fórmula o valor fijo: "alto - 100" o "700"
-  depthFormula     String?           // fórmula para profundidad (si aplica)
+  name             String
+  quantity         Float
+  widthFormula     String
+  heightFormula    String
+  depthFormula     String?
   materialCategory MaterialCategory  @default(TABLERO)
-  materialId       String?           // material específico (si es fijo)
+  materialId       String?
   material         Material?         @relation(fields: [materialId], references: [id])
-  needsEdge        Boolean           @default(false)   // necesita canto?
-  edgeSides        Int              @default(0)        // cantidad de lados con canto
-  edgeType         String?           // tipo de canto
-  hardwareList     String?           // JSON: lista de herrajes [{"id":"...", "qty": 4}]
-  laborHours       Float             @default(0)        // horas de mano de obra estimadas
+  needsEdge        Boolean           @default(false)
+  edgeSides        Int              @default(0)
+  edgeType         String?
+  hardwareList     String?
+  laborHours       Float             @default(0)
   sortOrder        Int               @default(0)
 }
 
@@ -145,13 +145,13 @@ model Quotation {
   location          String?
   notes             String?
   subtotal          Float    @default(0)
-  margin            Float    @default(25)  // porcentaje de margen
+  margin            Float    @default(25)
   total             Float    @default(0)
-  status            String   @default("BORRADOR") // BORRADOR, ENVIADA, APROBADA, RECHAZADA
-  archiiTenantId    String?  // Multi-tenant isolation from Archii
-  archiiProjectId   String?  // Links quotation to a specific Archii project
-  archiiSyncedAt    DateTime? // Tracks when quotation was synced to Archii
-  archiiWebhookId   String?  // Tracks webhook delivery status
+  status            String   @default("BORRADOR")
+  archiiTenantId    String?
+  archiiProjectId   String?
+  archiiSyncedAt    DateTime?
+  archiiWebhookId   String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -164,16 +164,16 @@ model QuotationItem {
   quotation     Quotation          @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   templateId    String?
   template      FurnitureTemplate? @relation(fields: [templateId], references: [id])
-  customName    String?              // nombre personalizado si no usa template
-  width         Float                // mm
-  height        Float                // mm
-  depth         Float?               // mm
+  customName    String?
+  width         Float
+  height        Float
+  depth         Float?
   quantity      Int      @default(1)
   materialId    String?
   material      Material? @relation(fields: [materialId], references: [id])
-  materialType  String?              // tipo de material: MDF, Melamina, Madera
-  finishType    String?              // tipo de acabado: lacado, melamina, natural
-  subtotal      Float    @default(0) // costo calculado
-  detail        String?             // JSON con desglose detallado
+  materialType  String?
+  finishType    String?
+  subtotal      Float    @default(0)
+  detail        String?
   sortOrder     Int      @default(0)
 }
