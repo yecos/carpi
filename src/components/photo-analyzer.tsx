@@ -61,6 +61,29 @@ export function PhotoAnalyzer({ templates, onAnalysisComplete, onCancel }: Photo
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  function compressImage(dataUrl: string, maxSize = 768, quality = 0.7): Promise<string> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+        if (width > maxSize || height > maxSize) {
+          const ratio = Math.min(maxSize / width, maxSize / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(dataUrl); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -78,10 +101,12 @@ export function PhotoAnalyzer({ templates, onAnalysisComplete, onCancel }: Photo
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const dataUrl = event.target?.result as string;
       setImagePreview(dataUrl);
-      setImageBase64(dataUrl);
+      // COMPRESS image before storing = fewer tokens when sent to API
+      const compressed = await compressImage(dataUrl, 768, 0.7);
+      setImageBase64(compressed);
       setResult(null);
       setError(null);
     };

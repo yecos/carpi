@@ -36,17 +36,8 @@ const QUICK_PROMPTS = [
   { icon: Sparkles, label: 'Recomendaciones', prompt: '¿Qué tipo de herrajes recomiendas para cajones de cocina que sean buena relación calidad-precio?' },
 ];
 
-const SYSTEM_CONTEXT = `Eres el asistente de IA de Carpi, un cotizador de carpintería para proyectos de diseño de interiores en Colombia. 
-
-Tu expertise incluye:
-- Cálculo de materiales para muebles (MDF, Melamina, Madera)
-- Dimensiones estándar de carpintería colombiana
-- Acabados (Lacado, Barniz, Poliuretano, Melamina, Natural)
-- Herrajes y accesorios (bisagras, correderas, tiradores)
-- Estimación de costos y tiempos
-- Recomendaciones de diseño y materiales
-
-Responde de forma clara y práctica. Usa medidas en milímetros. Da recomendaciones específicas para el mercado colombiano cuando sea relevante.`;
+// Compact system prompt — saves input tokens
+const SYSTEM_CONTEXT = 'Asistente Carpi: carpintería CO. Responde breve. Materiales:MDF,Melamina,Madera. Acabados:Lacado,Barniz,Poliuretano,Melamina,Natural. Dimensiones en mm. Dims estándar: cocina_b=600x720x580, cocina_a=600x720x350, closet=800x2400x600, baño=900x800x500, tv=1800x500x450.';
 
 export function AiChat({ onClose }: AiChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -83,17 +74,18 @@ export function AiChat({ onClose }: AiChatProps) {
     setLoading(true);
 
     try {
-      // Build conversation history for context
+      // Only send last 4 messages to save tokens (context window trimming)
+      const recentMessages = messages.slice(-4);
       const chatMessages = [
         { role: 'system' as const, content: SYSTEM_CONTEXT },
-        ...messages.map(m => ({ role: m.role, content: m.content })),
+        ...recentMessages.map(m => ({ role: m.role, content: m.content })),
         { role: 'user' as const, content: text.trim() },
       ];
 
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: chatMessages }),
+        body: JSON.stringify({ messages: chatMessages, maxTokens: 300, temperature: 0.7 }),
       });
 
       const data = await res.json();

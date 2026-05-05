@@ -3,6 +3,7 @@ import { aiVision } from '@/lib/ai-service';
 
 // POST /api/analyze-furniture
 // Analyzes a furniture photo using AI Vision (OpenAI → Gemini → Z AI)
+// TOKEN-OPTIMIZED: short prompt, compact JSON, limited output
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -15,49 +16,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const prompt = `Eres un experto en carpintería y diseño de interiores en Colombia. Analiza esta foto de un mueble y proporciona la siguiente información en formato JSON exacto.
+    // ULTRA-SHORT PROMPT — saves ~70% tokens vs the long version
+    // All rules are baked into the JSON schema itself
+    const prompt = `Identifica el mueble. Responde SOLO JSON compacto sin backticks:
+{"type":"COCINA|CLOSET|BANO|SALA|OFICINA|COMEDOR|DORMITORIO|OTRO","template":"Módulo Cocina Base|Módulo Cocina Alto|Módulo Closet|Vanidad Baño|Mueble TV|Estantería","name":"descripción corta","w":ancho_mm,"h":alto_mm,"d":prof_mm,"mat":"MDF|Melamina|Madera","fin":"Lacado|Barniz|Poliuretano|Melamina|Natural","conf":"alta|media|baja","parts":[{"n":"Puerta","q":2,"edge":true}],"obs":"notas breves"}
+Dims estándar CO: cocina_b=600x720x580,cocina_a=600x720x350,closet=800x2400x600,baño=900x800x500,tv=1800x500x450,estant=1200x2000x350. Mat: liso=lacado→MDF, textura impresa→Melamina, veta natural→Madera.`;
 
-Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin backticks:
-
-{
-  "furnitureType": "COCINA | CLOSET | BANO | SALA | OFICINA | COMEDOR | DORMITORIO | OTRO",
-  "suggestedTemplate": "nombre del tipo de mueble estándar que más se parece (Módulo Cocina Base, Módulo Cocina Alto, Módulo Closet, Vanidad Baño, Mueble TV, Estantería, u otro)",
-  "customName": "nombre descriptivo del mueble visto en la foto",
-  "estimatedWidth": número en milímetros (estimación del ancho),
-  "estimatedHeight": número en milímetros (estimación del alto),
-  "estimatedDepth": número en milímetros (estimación de la profundidad),
-  "materialType": "MDF | Melamina | Madera",
-  "finishType": "Lacado | Barniz | Poliuretano | Melamina | Natural",
-  "confidence": "alta | media | baja",
-  "components": [
-    {
-      "name": "nombre del componente (ej: Puerta, Lateral, Repisa, Fondo, Tapa)",
-      "estimatedQuantity": número,
-      "needsEdge": true/false
-    }
-  ],
-  "observations": "observaciones adicionales sobre el mueble, acabado, detalles visibles, herrajes que se puedan identificar"
-}
-
-REGLAS IMPORTANTES:
-- Si es un mueble de cocina bajo (debajo de la encimera), usa furnitureType "COCINA" y suggestedTemplate "Módulo Cocina Base"
-- Si es un mueble de cocina alto (alacena), usa furnitureType "COCINA" y suggestedTemplate "Módulo Cocina Alto"
-- Si es un closet o vestier, usa "CLOSET" y "Módulo Closet"
-- Si es una vanidad o mueble de baño, usa "BANO" y "Vanidad Baño"
-- Si es un mueble de TV o centro de entretenimiento, usa "SALA" y "Mueble TV"
-- Si es una estantería o librería, usa "OFICINA" y "Estantería"
-- Para dimensiones, usa referencias estándar de carpintería colombiana si no hay referencia de escala clara:
-  * Cocina base: 600mm ancho × 720mm alto × 580mm profundidad
-  * Cocina alto: 600mm ancho × 720mm alto × 350mm profundidad
-  * Closet: 800mm ancho × 2400mm alto × 600mm profundidad
-  * Vanidad baño: 900mm ancho × 800mm alto × 500mm profundidad
-  * Mueble TV: 1800mm ancho × 500mm alto × 450mm profundidad
-  * Estantería: 1200mm ancho × 2000mm alto × 350mm profundidad
-- Identifica el material: MDF (si parece tablero liso, generalmente lacado), Melamina (si tiene textura de madera impresa), Madera natural (si tiene veta natural visible)
-- Identifica herrajes visibles: bisagras, tiradores, correderas
-- El campo confidence indica qué tan seguro estás de las estimaciones`;
-
-    // Use the unified AI service (OpenAI → Gemini → Z AI)
+    // Use the unified AI service with TIGHT token limits
     const result = await aiVision(
       [
         {
@@ -68,17 +33,36 @@ REGLAS IMPORTANTES:
           ],
         },
       ],
-      { maxTokens: 2048, temperature: 0.2 }
+      { maxTokens: 150, temperature: 0.1 } // Tight! Compact JSON fits in ~100 tokens
     );
 
-    // Try to parse the JSON response
+    // Parse the compact JSON response
     let parsed;
     try {
       const cleaned = result.content
         .replace(/```json\s*/g, '')
         .replace(/```\s*/g, '')
         .trim();
-      parsed = JSON.parse(cleaned);
+      const raw = JSON.parse(cleaned);
+
+      // Map compact format to full format (frontend expects this)
+      parsed = {
+        furnitureType: raw.type || 'OTRO',
+        suggestedTemplate: raw.template || '',
+        customName: raw.name || '',
+        estimatedWidth: raw.w || 600,
+        estimatedHeight: raw.h || 720,
+        estimatedDepth: raw.d || 500,
+        materialType: raw.mat || 'MDF',
+        finishType: raw.fin || 'Lacado',
+        confidence: raw.conf || 'media',
+        components: (raw.parts || []).map((p: { n: string; q: number; edge: boolean }) => ({
+          name: p.n,
+          estimatedQuantity: p.q || 1,
+          needsEdge: !!p.edge,
+        })),
+        observations: raw.obs || '',
+      };
     } catch {
       console.error('Failed to parse AI response as JSON:', result.content);
       return NextResponse.json({

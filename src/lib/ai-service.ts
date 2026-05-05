@@ -1,15 +1,14 @@
-// Unified AI Service for Carpi
+// Unified AI Service for Carpi — TOKEN-OPTIMIZED
 // Provider priority: OpenAI → Gemini → Z AI (local only)
-// OpenAI is preferred for Vercel (public API, fast, reliable)
-// Z AI is only used in local dev where the internal network is accessible
+// Optimizations: gpt-4.1-mini, short prompts, limited output, image compression
 
 // ============================
 // OpenAI Provider (ChatGPT) - PRIMARY for production
 // ============================
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini';
-const OPENAI_VISION_MODEL = process.env.OPENAI_VISION_MODEL || 'gpt-4o';
+const OPENAI_CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4.1-mini';
+const OPENAI_VISION_MODEL = process.env.OPENAI_VISION_MODEL || 'gpt-4.1-mini';
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
 
 // ============================
@@ -56,7 +55,69 @@ interface AIContentPart {
 }
 
 // ============================
-// OpenAI API calls
+// Image compression utility
+// Reduces image size before sending to API = fewer tokens
+// ============================
+
+export function compressImageBase64(
+  base64DataUrl: string,
+  maxSize: number = 768,
+  quality: number = 0.7
+): Promise<string> {
+  return new Promise((resolve) => {
+    // If it's a URL (not base64), return as-is
+    if (!base64DataUrl.startsWith('data:')) {
+      resolve(base64DataUrl);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let { width, height } = img;
+
+      // Scale down if larger than maxSize
+      if (width > maxSize || height > maxSize) {
+        const ratio = Math.min(maxSize / width, maxSize / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(base64DataUrl); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Compress as JPEG with quality setting
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(base64DataUrl);
+    img.src = base64DataUrl;
+  });
+}
+
+/**
+ * Server-side: strip base64 prefix and reduce if possible
+ * For server-side we just extract the data efficiently
+ */
+export function optimizeImageForAPI(dataUrl: string): { mimeType: string; base64: string } {
+  if (!dataUrl.startsWith('data:')) {
+    // It's a URL, not base64 - return as-is for OpenAI image_url format
+    return { mimeType: 'image/jpeg', base64: dataUrl };
+  }
+
+  const matches = dataUrl.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
+  if (matches) {
+    return { mimeType: matches[1], base64: matches[2] };
+  }
+
+  // Fallback: treat as JPEG
+  return { mimeType: 'image/jpeg', base64: dataUrl.split(',')[1] || dataUrl };
+}
+
+// ============================
+// OpenAI API calls — TOKEN OPTIMIZED
 // ============================
 
 async function callOpenAIChat(
@@ -71,7 +132,7 @@ async function callOpenAIChat(
       role: m.role,
       content: m.content,
     })),
-    max_tokens: options?.maxTokens ?? 2048,
+    max_tokens: options?.maxTokens ?? 300, // Reduced from 2048
     temperature: options?.temperature ?? 0.7,
   };
 
@@ -105,17 +166,17 @@ async function callOpenAIVision(
 ): Promise<{ content: string; model: string }> {
   if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not configured');
 
-  // Convert messages to OpenAI format - they natively support image_url
+  // Convert messages - OpenAI natively supports image_url
   const formattedMessages = messages.map(m => ({
     role: m.role,
     content: m.content,
   }));
 
   const body = {
-    model: OPENAI_VISION_MODEL,
+    model: OPENAI_VISION_MODEL, // gpt-4.1-mini supports vision!
     messages: formattedMessages,
-    max_tokens: options?.maxTokens ?? 2048,
-    temperature: options?.temperature ?? 0.2,
+    max_tokens: options?.maxTokens ?? 150, // Vision analysis: short JSON output only
+    temperature: options?.temperature ?? 0.1, // Low temp for consistent structured output
   };
 
   const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
@@ -174,7 +235,7 @@ async function callGeminiChat(
     contents: [{ parts }],
     generationConfig: {
       temperature: options?.temperature ?? 0.7,
-      maxOutputTokens: options?.maxTokens ?? 2048,
+      maxOutputTokens: options?.maxTokens ?? 300,
     },
   };
 
@@ -227,20 +288,9 @@ async function callGeminiVision(
           parts.push({ text: part.text });
         }
         if (part.type === 'image_url' && part.image_url?.url) {
-          const url = part.image_url.url;
-          let mimeType = 'image/jpeg';
-          let base64Data = url;
-
-          if (url.startsWith('data:')) {
-            const matches = url.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
-            if (matches) {
-              mimeType = matches[1];
-              base64Data = matches[2];
-            }
-          }
-
+          const { mimeType, base64 } = optimizeImageForAPI(part.image_url.url);
           parts.push({
-            inline_data: { mime_type: mimeType, data: base64Data },
+            inline_data: { mime_type: mimeType, data: base64 },
           });
         }
       }
@@ -250,8 +300,8 @@ async function callGeminiVision(
   const body = {
     contents: [{ parts }],
     generationConfig: {
-      temperature: options?.temperature ?? 0.2,
-      maxOutputTokens: options?.maxTokens ?? 2048,
+      temperature: options?.temperature ?? 0.1,
+      maxOutputTokens: options?.maxTokens ?? 150,
     },
   };
 
@@ -416,7 +466,7 @@ export async function aiChat(
 ): Promise<AIResponse> {
   const errors: string[] = [];
 
-  // 1. Try OpenAI first (best for production)
+  // 1. Try OpenAI first (cheapest with gpt-4.1-mini)
   if (OPENAI_API_KEY) {
     try {
       const result = await callOpenAIChat(messages, options);
@@ -469,7 +519,7 @@ export async function aiVision(
 ): Promise<AIResponse> {
   const errors: string[] = [];
 
-  // 1. Try OpenAI Vision (GPT-4o - best vision model)
+  // 1. Try OpenAI Vision (gpt-4.1-mini with vision)
   if (OPENAI_API_KEY) {
     try {
       const result = await callOpenAIVision(messages, options);
