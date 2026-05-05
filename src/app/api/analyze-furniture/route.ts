@@ -1,8 +1,8 @@
-import ZAI from 'z-ai-web-dev-sdk';
 import { NextResponse } from 'next/server';
 
 // POST /api/analyze-furniture
 // Analyzes a furniture photo using AI Vision and returns structured data
+// Uses direct fetch to the Z AI Vision API (compatible with both local and Vercel)
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -15,7 +15,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const zai = await ZAI.create();
+    // Get API configuration from environment variables
+    const zaiBaseUrl = process.env.ZAI_BASE_URL;
+    const zaiApiKey = process.env.ZAI_API_KEY;
+
+    if (!zaiBaseUrl || !zaiApiKey) {
+      console.error('Z AI Vision API not configured. Set ZAI_BASE_URL and ZAI_API_KEY env vars.');
+      return NextResponse.json(
+        {
+          error: 'Servicio de IA no configurado. Configure las variables de entorno ZAI_BASE_URL y ZAI_API_KEY.',
+          code: 'AI_NOT_CONFIGURED',
+        },
+        { status: 503 }
+      );
+    }
 
     const prompt = `Eres un experto en carpintería y diseño de interiores en Colombia. Analiza esta foto de un mueble y proporciona la siguiente información en formato JSON exacto.
 
@@ -59,7 +72,9 @@ REGLAS IMPORTANTES:
 - Identifica herrajes visibles: bisagras, tiradores, correderas
 - El campo confidence indica qué tan seguro estás de las estimaciones`;
 
-    const response = await zai.chat.completions.createVision({
+    // Build the vision API request body
+    const visionRequestBody = {
+      model: process.env.ZAI_VISION_MODEL || 'glm-4v-flash',
       messages: [
         {
           role: 'user',
@@ -78,9 +93,34 @@ REGLAS IMPORTANTES:
         },
       ],
       thinking: { type: 'disabled' },
+    };
+
+    // Make direct HTTP request to the Z AI Vision API
+    const apiUrl = `${zaiBaseUrl}/chat/completions/vision`;
+    const apiResponse = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${zaiApiKey}`,
+        'X-Z-AI-From': 'Z',
+      },
+      body: JSON.stringify(visionRequestBody),
     });
 
-    const content = response.choices[0]?.message?.content;
+    if (!apiResponse.ok) {
+      const errorBody = await apiResponse.text();
+      console.error('Vision API error:', apiResponse.status, errorBody);
+      return NextResponse.json(
+        {
+          error: 'Error del servicio de IA. Intente de nuevo más tarde.',
+          details: apiResponse.status >= 500 ? 'Service temporarily unavailable' : undefined,
+        },
+        { status: apiResponse.status >= 500 ? 502 : apiResponse.status }
+      );
+    }
+
+    const response = await apiResponse.json();
+    const content = response.choices?.[0]?.message?.content;
 
     if (!content) {
       return NextResponse.json(

@@ -114,8 +114,11 @@ export function PhotoAnalyzer({ templates, onAnalysisComplete, onCancel }: Photo
       const data = await res.json();
 
       if (!data.success) {
-        setError(data.error || data.rawResponse || 'Error al analizar la imagen');
-        toast.error('Error al analizar la imagen');
+        const errorMsg = data.code === 'AI_NOT_CONFIGURED'
+          ? 'El servicio de IA no está configurado. Contacte al administrador.'
+          : (data.error || data.rawResponse || 'Error al analizar la imagen');
+        setError(errorMsg);
+        toast.error(data.error || 'Error al analizar la imagen');
         return;
       }
 

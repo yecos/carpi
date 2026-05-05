@@ -246,13 +246,16 @@ export function ArchiiConfig({ onClose }: ArchiiConfigProps) {
 
                     <div className="flex items-center gap-2">
                       <Key className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <form onSubmit={(e) => e.preventDefault()} className="flex-1">
                       <Input
                         type="password"
+                        autoComplete="off"
                         placeholder="API Key de Archii"
                         defaultValue={tenant.apiKey}
                         onBlur={(e) => handleUpdateApiKey(tenant.id, e.target.value)}
                         className="h-8 text-xs"
                       />
+                      </form>
                       <Button
                         variant="outline"
                         size="sm"
@@ -309,13 +312,16 @@ export function ArchiiConfig({ onClose }: ArchiiConfigProps) {
               <div className="grid gap-1">
                 <Label className="text-xs">API Key</Label>
                 <div className="flex gap-1">
+                  <form onSubmit={(e) => e.preventDefault()} className="flex-1">
                   <Input
                     type="password"
+                    autoComplete="off"
                     value={newApiKey}
                     onChange={(e) => setNewApiKey(e.target.value)}
                     placeholder="archii-ak-..."
                     className="h-8 text-xs"
                   />
+                  </form>
                   <Button
                     size="sm"
                     className="h-8 gradient-amber text-white hover:opacity-90 shrink-0"
