@@ -24,8 +24,11 @@ import {
   Calculator,
   Package,
   Eye,
+  Camera,
+  Sparkles,
 } from 'lucide-react';
 import { formatCOP, FURNITURE_TYPES, MATERIAL_CATEGORIES } from '@/lib/format';
+import { PhotoAnalyzer } from './photo-analyzer';
 
 interface FurnitureTemplate {
   id: string;
@@ -124,6 +127,7 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
   const [templates, setTemplates] = useState<FurnitureTemplate[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [calculating, setCalculating] = useState<string | null>(null);
+  const [showPhotoAnalyzer, setShowPhotoAnalyzer] = useState(false);
 
   useEffect(() => {
     loadTemplates();
@@ -367,10 +371,54 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Items de la Cotización</h2>
-            <Button onClick={addItem} size="sm" className="bg-amber-600 hover:bg-amber-700">
-              <Plus className="h-4 w-4 mr-1" /> Agregar Item
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setShowPhotoAnalyzer(true)}
+                size="sm"
+                variant="outline"
+                className="gap-1 border-purple-300 text-purple-700 hover:bg-purple-50"
+              >
+                <Camera className="h-4 w-4" />
+                <span className="hidden sm:inline">Cotizar</span> desde Foto
+                <Sparkles className="h-3 w-3" />
+              </Button>
+              <Button onClick={addItem} size="sm" className="bg-amber-600 hover:bg-amber-700">
+                <Plus className="h-4 w-4 mr-1" /> Agregar Item
+              </Button>
+            </div>
           </div>
+
+          {/* Photo Analyzer */}
+          {showPhotoAnalyzer && (
+            <Card className="border-purple-200 bg-purple-50/30">
+              <CardContent className="p-4">
+                <PhotoAnalyzer
+                  templates={templates}
+                  onAnalysisComplete={(analysisResult) => {
+                    // Add a new item with the analysis results
+                    const newItem: QuotationItemDraft = {
+                      templateId: analysisResult.templateId || '',
+                      templateName: analysisResult.templateName,
+                      customName: analysisResult.customName,
+                      width: analysisResult.width,
+                      height: analysisResult.height,
+                      depth: analysisResult.depth,
+                      quantity: 1,
+                      materialType: analysisResult.materialType,
+                      finishType: analysisResult.finishType,
+                      subtotal: 0,
+                      breakdown: null,
+                      totalSubtotal: 0,
+                    };
+                    setItems([...items, newItem]);
+                    setShowPhotoAnalyzer(false);
+                    toast.success('Item agregado desde análisis de foto. Presiona Calcular para ver el costo.');
+                  }}
+                  onCancel={() => setShowPhotoAnalyzer(false)}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {items.length === 0 ? (
             <Card>
