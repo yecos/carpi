@@ -175,7 +175,7 @@ async function callOpenAIVision(
   const body = {
     model: OPENAI_VISION_MODEL, // gpt-4.1-mini supports vision!
     messages: formattedMessages,
-    max_tokens: options?.maxTokens ?? 150, // Vision analysis: short JSON output only
+    max_tokens: options?.maxTokens ?? 300, // Enough for complete compact JSON
     temperature: options?.temperature ?? 0.1, // Low temp for consistent structured output
   };
 

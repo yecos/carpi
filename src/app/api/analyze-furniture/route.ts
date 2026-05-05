@@ -16,13 +16,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // ULTRA-SHORT PROMPT — saves ~70% tokens vs the long version
-    // All rules are baked into the JSON schema itself
-    const prompt = `Identifica el mueble. Responde SOLO JSON compacto sin backticks:
-{"type":"COCINA|CLOSET|BANO|SALA|OFICINA|COMEDOR|DORMITORIO|OTRO","template":"Módulo Cocina Base|Módulo Cocina Alto|Módulo Closet|Vanidad Baño|Mueble TV|Estantería","name":"descripción corta","w":ancho_mm,"h":alto_mm,"d":prof_mm,"mat":"MDF|Melamina|Madera","fin":"Lacado|Barniz|Poliuretano|Melamina|Natural","conf":"alta|media|baja","parts":[{"n":"Puerta","q":2,"edge":true}],"obs":"notas breves"}
-Dims estándar CO: cocina_b=600x720x580,cocina_a=600x720x350,closet=800x2400x600,baño=900x800x500,tv=1800x500x450,estant=1200x2000x350. Mat: liso=lacado→MDF, textura impresa→Melamina, veta natural→Madera.`;
+    // Short prompt — compact but clear enough for consistent JSON output
+    const prompt = `Identifica el mueble de la imagen. Responde SOLO JSON, sin texto antes ni después, sin backticks ni markdown:
+{"type":"COCINA|CLOSET|BANO|SALA|OFICINA|COMEDOR|DORMITORIO|OTRO","template":"Módulo Cocina Base|Módulo Cocina Alto|Módulo Closet|Vanidad Baño|Mueble TV|Estantería","name":"nombre descriptivo","w":ancho_mm,"h":alto_mm,"d":prof_mm,"mat":"MDF|Melamina|Madera","fin":"Lacado|Barniz|Poliuretano|Melamina|Natural","conf":"alta|media|baja","parts":[{"n":"componente","q":1,"edge":false}],"obs":"notas"}
+Dims estándar Colombia: cocina_b=600x720x580, cocina_a=600x720x350, closet=800x2400x600, baño=900x800x500, tv=1800x500x450, estantería=1200x2000x350. Material: liso→MDF, textura impresa→Melamina, veta natural→Madera.`;
 
-    // Use the unified AI service with TIGHT token limits
+    // Use the unified AI service — 300 tokens is safe for complete JSON
     const result = await aiVision(
       [
         {
@@ -33,17 +32,49 @@ Dims estándar CO: cocina_b=600x720x580,cocina_a=600x720x350,closet=800x2400x600
           ],
         },
       ],
-      { maxTokens: 150, temperature: 0.1 } // Tight! Compact JSON fits in ~100 tokens
+      { maxTokens: 300, temperature: 0.1 }
     );
 
-    // Parse the compact JSON response
+    // Robust JSON parsing
     let parsed;
     try {
-      const cleaned = result.content
+      // Step 1: Clean markdown artifacts
+      let cleaned = result.content
         .replace(/```json\s*/g, '')
         .replace(/```\s*/g, '')
         .trim();
-      const raw = JSON.parse(cleaned);
+
+      // Step 2: Try to find JSON object in the response
+      const jsonStart = cleaned.indexOf('{');
+      const jsonEnd = cleaned.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd > jsonStart) {
+        cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+      }
+
+      // Step 3: Try to parse
+      let raw;
+      try {
+        raw = JSON.parse(cleaned);
+      } catch {
+        // Step 4: Try to fix common issues — truncated JSON
+        // If JSON is incomplete (missing closing brackets), try to repair
+        const openBraces = (cleaned.match(/{/g) || []).length;
+        const closeBraces = (cleaned.match(/}/g) || []).length;
+        const openBrackets = (cleaned.match(/\[/g) || []).length;
+        const closeBrackets = (cleaned.match(/]/g) || []).length;
+
+        let repaired = cleaned;
+        // Close unclosed arrays
+        for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']';
+        // Close unclosed objects
+        for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}';
+
+        // Try to fix truncated strings (last value without closing quote)
+        repaired = repaired.replace(/"obs"\s*:\s*"[^"]*$/, '"obs":""}');
+        repaired = repaired.replace(/"name"\s*:\s*"[^"]*$/, '"name":""}');
+
+        raw = JSON.parse(repaired);
+      }
 
       // Map compact format to full format (frontend expects this)
       parsed = {
@@ -63,8 +94,8 @@ Dims estándar CO: cocina_b=600x720x580,cocina_a=600x720x350,closet=800x2400x600
         })),
         observations: raw.obs || '',
       };
-    } catch {
-      console.error('Failed to parse AI response as JSON:', result.content);
+    } catch (parseError) {
+      console.error('Failed to parse AI response as JSON:', result.content, parseError);
       return NextResponse.json({
         success: false,
         rawResponse: result.content,
