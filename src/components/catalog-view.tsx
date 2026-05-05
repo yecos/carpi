@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +42,8 @@ import {
   ChevronUp,
   X,
   GripVertical,
+  ImageIcon,
+  Upload,
 } from 'lucide-react';
 import { FURNITURE_TYPES, MATERIAL_CATEGORIES } from '@/lib/format';
 
@@ -66,6 +68,7 @@ interface FurnitureTemplate {
   name: string;
   type: string;
   description: string | null;
+  image: string | null;
   active: boolean;
   components: FurnitureComponent[];
 }
@@ -93,8 +96,10 @@ export function CatalogView() {
     name: '',
     type: 'COCINA',
     description: '',
+    image: '',
   });
   const [formComponents, setFormComponents] = useState<FurnitureComponent[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -127,7 +132,7 @@ export function CatalogView() {
 
   function openCreateDialog() {
     setEditingTemplate(null);
-    setForm({ name: '', type: 'COCINA', description: '' });
+    setForm({ name: '', type: 'COCINA', description: '', image: '' });
     setFormComponents([
       {
         name: '',
@@ -153,6 +158,7 @@ export function CatalogView() {
       name: template.name,
       type: template.type,
       description: template.description || '',
+      image: template.image || '',
     });
     setFormComponents(
       template.components.map((c) => ({
@@ -165,6 +171,21 @@ export function CatalogView() {
       }))
     );
     setDialogOpen(true);
+  }
+
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('La imagen no debe superar 2MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setForm({ ...form, image: dataUrl });
+    };
+    reader.readAsDataURL(file);
   }
 
   function addComponent() {
@@ -213,6 +234,7 @@ export function CatalogView() {
         name: form.name,
         type: form.type,
         description: form.description || null,
+        image: form.image || null,
         components: formComponents.map((c) => ({
           name: c.name,
           quantity: c.quantity,
@@ -272,13 +294,13 @@ export function CatalogView() {
   }, {});
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Catálogo de Mobiliario</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-700 to-amber-900 dark:from-amber-400 dark:to-amber-600 bg-clip-text text-transparent">Catálogo de Mobiliario</h1>
           <p className="text-muted-foreground">Plantillas y componentes de muebles</p>
         </div>
-        <Button onClick={openCreateDialog} className="bg-amber-600 hover:bg-amber-700">
+        <Button onClick={openCreateDialog} className="gradient-amber text-white hover:opacity-90 shadow-glow-sm">
           <Plus className="h-4 w-4 mr-2" />
           Nueva Plantilla
         </Button>
@@ -323,9 +345,23 @@ export function CatalogView() {
               {items.map((template) => {
                 const isExpanded = expandedId === template.id;
                 return (
-                  <Card key={template.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-5">
-                      <div className="flex items-start justify-between mb-3">
+                  <Card key={template.id} className="hover:shadow-premium-lg transition-all duration-300 overflow-hidden group">
+                    {/* Image area */}
+                    {template.image ? (
+                      <div className="h-36 bg-muted overflow-hidden">
+                        <img
+                          src={template.image}
+                          alt={template.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-36 gradient-amber-subtle flex items-center justify-center">
+                        <ImageIcon className="h-12 w-12 text-primary/30" />
+                      </div>
+                    )}
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-2">
                         <div>
                           <h3 className="font-semibold">{template.name}</h3>
                           <Badge variant="secondary" className="mt-1 text-xs">
@@ -342,7 +378,7 @@ export function CatalogView() {
                         </div>
                       </div>
                       {template.description && (
-                        <p className="text-sm text-muted-foreground mb-3">{template.description}</p>
+                        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{template.description}</p>
                       )}
                       <div className="flex items-center justify-between">
                         <Badge variant="outline" className="text-xs">
@@ -413,6 +449,42 @@ export function CatalogView() {
             <div className="grid gap-2">
               <Label>Descripción</Label>
               <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
+            </div>
+
+            {/* Image Upload */}
+            <div className="grid gap-2">
+              <Label>Imagen</Label>
+              <div className="flex items-center gap-3">
+                {form.image ? (
+                  <div className="relative w-24 h-24 rounded-lg overflow-hidden border">
+                    <img src={form.image} alt="Preview" className="w-full h-full object-cover" />
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-1 right-1 h-5 w-5"
+                      onClick={() => setForm({ ...form, image: '' })}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="w-24 h-24 flex flex-col gap-1"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-6 w-6 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Subir</span>
+                  </Button>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+              </div>
             </div>
 
             {/* Components */}
@@ -516,7 +588,7 @@ export function CatalogView() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} className="bg-amber-600 hover:bg-amber-700">
+            <Button onClick={handleSave} className="gradient-amber text-white hover:opacity-90">
               {editingTemplate ? 'Actualizar' : 'Crear'}
             </Button>
           </DialogFooter>

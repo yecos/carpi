@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Truck, Phone, Mail, MapPin } from 'lucide-react';
+import { Plus, Pencil, Trash2, Truck, Phone, Mail, MapPin, Download, Star } from 'lucide-react';
 
 interface Supplier {
   id: string;
@@ -138,17 +138,43 @@ export function SuppliersView() {
     }
   }
 
+  async function handleExportExcel() {
+    try {
+      const res = await fetch('/api/export/excel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'materials' }),
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `proveedores_${new Date().toISOString().split('T')[0]}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Excel exportado');
+    } catch (error) {
+      console.error('Error exporting:', error);
+      toast.error('Error al exportar Excel');
+    }
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Proveedores</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-700 to-amber-900 dark:from-amber-400 dark:to-amber-600 bg-clip-text text-transparent">Proveedores</h1>
           <p className="text-muted-foreground">Gestión de proveedores de materiales</p>
         </div>
-        <Button onClick={openCreateDialog} className="bg-amber-600 hover:bg-amber-700">
-          <Plus className="h-4 w-4 mr-2" />
-          Nuevo Proveedor
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportExcel}>
+            <Download className="h-4 w-4 mr-1" /> Exportar
+          </Button>
+          <Button onClick={openCreateDialog} className="gradient-amber text-white hover:opacity-90 shadow-glow-sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Nuevo Proveedor
+          </Button>
+        </div>
       </div>
 
       {/* Suppliers Grid */}
@@ -171,17 +197,18 @@ export function SuppliersView() {
           </div>
         ) : (
           suppliers.map((supplier) => (
-            <Card key={supplier.id} className="hover:shadow-md transition-shadow">
+            <Card key={supplier.id} className="hover:shadow-premium-lg transition-all duration-300 stat-card-hover">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3">
-                    <div className="p-2.5 rounded-lg bg-amber-50 mt-0.5">
-                      <Truck className="h-5 w-5 text-amber-600" />
+                    <div className="p-2.5 rounded-lg gradient-amber text-white mt-0.5">
+                      <Truck className="h-5 w-5" />
                     </div>
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold">{supplier.name}</h3>
-                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
+                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 gap-1">
+                          <Star className="h-3 w-3" />
                           {supplier._count.materials} materiales
                         </Badge>
                       </div>
@@ -189,17 +216,17 @@ export function SuppliersView() {
                         <p className="text-sm text-muted-foreground">{supplier.contact}</p>
                       )}
                       {supplier.phone && (
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                           <Phone className="h-3 w-3" /> {supplier.phone}
                         </p>
                       )}
                       {supplier.email && (
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                           <Mail className="h-3 w-3" /> {supplier.email}
                         </p>
                       )}
                       {supplier.address && (
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                           <MapPin className="h-3 w-3" /> {supplier.address}
                         </p>
                       )}
@@ -252,7 +279,7 @@ export function SuppliersView() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} className="bg-amber-600 hover:bg-amber-700">
+            <Button onClick={handleSave} className="gradient-amber text-white hover:opacity-90">
               {editingSupplier ? 'Actualizar' : 'Crear'}
             </Button>
           </DialogFooter>

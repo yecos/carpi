@@ -11,6 +11,23 @@ datasource db {
 }
 
 // ============================================
+// CLIENTES
+// ============================================
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quotations Quotation[]
+}
+
+// ============================================
 // PROVEEDORES
 // ============================================
 model Supplier {
@@ -51,6 +68,7 @@ model Material {
   active       Boolean          @default(true)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
+  priceUpdatedAt DateTime?
 
   // Propiedades específicas por categoría
   thickness    Float?           // mm (para tableros)
@@ -117,6 +135,8 @@ model FurnitureComponent {
 model Quotation {
   id            String   @id @default(cuid())
   clientName    String
+  clientId      String?
+  client        Client?  @relation(fields: [clientId], references: [id])
   project       String
   location      String?
   notes         String?

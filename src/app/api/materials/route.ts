@@ -44,6 +44,7 @@ export async function POST(request: Request) {
         color: body.color || null,
         materialType: body.materialType || null,
         active: body.active !== false,
+        priceUpdatedAt: body.priceUpdatedAt ? new Date(body.priceUpdatedAt) : new Date(),
       },
       include: { supplier: true },
     });

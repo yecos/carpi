@@ -31,8 +31,11 @@ import {
   FileText,
   Search,
   ArrowLeft,
+  Copy,
+  Download,
+  Pencil,
 } from 'lucide-react';
-import { formatCOP, formatDate, QUOTATION_STATUS, FURNITURE_TYPES } from '@/lib/format';
+import { formatCOP, formatDate, QUOTATION_STATUS } from '@/lib/format';
 import { QuotationBuilder } from './quotation-builder';
 import { QuotationDetail } from './quotation-detail';
 
@@ -65,16 +68,18 @@ interface Quotation {
   items: QuotationItem[];
 }
 
-type ViewMode = 'list' | 'create' | 'detail';
+type ViewMode = 'list' | 'create' | 'detail' | 'edit';
 
 export function QuotationsView() {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
+  const [editingQuotation, setEditingQuotation] = useState<Quotation | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<Quotation | null>(null);
+  const [duplicating, setDuplicating] = useState<string | null>(null);
 
   const loadQuotations = useCallback(async () => {
     try {
@@ -118,23 +123,44 @@ export function QuotationsView() {
       const marginAmount = subtotal * data.margin / 100;
       const total = subtotal + marginAmount;
 
-      await fetch('/api/quotations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientName: data.clientName,
-          project: data.project,
-          location: data.location || null,
-          notes: data.notes || null,
-          margin: data.margin,
-          subtotal,
-          total,
-          status: 'BORRADOR',
-          items: data.items,
-        }),
-      });
+      if (editingQuotation) {
+        // Update existing quotation
+        await fetch(`/api/quotations/${editingQuotation.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientName: data.clientName,
+            project: data.project,
+            location: data.location || null,
+            notes: data.notes || null,
+            margin: data.margin,
+            subtotal,
+            total,
+            items: data.items,
+          }),
+        });
+        toast.success('Cotización actualizada exitosamente');
+      } else {
+        // Create new quotation
+        await fetch('/api/quotations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientName: data.clientName,
+            project: data.project,
+            location: data.location || null,
+            notes: data.notes || null,
+            margin: data.margin,
+            subtotal,
+            total,
+            status: 'BORRADOR',
+            items: data.items,
+          }),
+        });
+        toast.success('Cotización creada exitosamente');
+      }
 
-      toast.success('Cotización creada exitosamente');
+      setEditingQuotation(null);
       setViewMode('list');
       loadQuotations();
     } catch (error) {
@@ -155,6 +181,36 @@ export function QuotationsView() {
     }
   }
 
+  async function handleDuplicate(quotation: Quotation) {
+    setDuplicating(quotation.id);
+    try {
+      await fetch(`/api/quotations/${quotation.id}/duplicate`, { method: 'POST' });
+      toast.success('Cotización duplicada');
+      loadQuotations();
+    } catch (error) {
+      console.error('Error duplicating quotation:', error);
+      toast.error('Error al duplicar cotización');
+    } finally {
+      setDuplicating(null);
+    }
+  }
+
+  async function handleDownloadPdf(quotation: Quotation) {
+    try {
+      const res = await fetch(`/api/quotations/${quotation.id}/pdf`, { method: 'POST' });
+      const html = await res.text();
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+        setTimeout(() => printWindow.print(), 500);
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Error al generar PDF');
+    }
+  }
+
   async function viewQuotation(id: string) {
     try {
       const res = await fetch(`/api/quotations/${id}`);
@@ -167,25 +223,33 @@ export function QuotationsView() {
     }
   }
 
+  function startEdit(quotation: Quotation) {
+    setEditingQuotation(quotation);
+    setViewMode('edit');
+  }
+
   const filteredQuotations = quotations.filter(
     (q) =>
       q.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       q.project.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Render Quotation Builder
-  if (viewMode === 'create') {
+  // Render Quotation Builder (Create or Edit)
+  if (viewMode === 'create' || viewMode === 'edit') {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" onClick={() => setViewMode('list')}>
+          <Button variant="ghost" onClick={() => { setViewMode('list'); setEditingQuotation(null); }}>
             <ArrowLeft className="h-4 w-4 mr-1" /> Volver
           </Button>
-          <h1 className="text-2xl font-bold">Nueva Cotización</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-700 to-amber-900 dark:from-amber-400 dark:to-amber-600 bg-clip-text text-transparent">
+            {editingQuotation ? 'Editar Cotización' : 'Nueva Cotización'}
+          </h1>
         </div>
         <QuotationBuilder
           onSave={handleSaveQuotation}
-          onCancel={() => setViewMode('list')}
+          onCancel={() => { setViewMode('list'); setEditingQuotation(null); }}
+          initialData={editingQuotation || undefined}
         />
       </div>
     );
@@ -204,6 +268,9 @@ export function QuotationsView() {
           viewQuotation(selectedQuotation.id);
           loadQuotations();
         }}
+        onEdit={() => startEdit(selectedQuotation)}
+        onDuplicate={() => handleDuplicate(selectedQuotation)}
+        onPdf={() => handleDownloadPdf(selectedQuotation)}
       />
     );
   }
@@ -213,12 +280,14 @@ export function QuotationsView() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Cotizaciones</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-700 to-amber-900 dark:from-amber-400 dark:to-amber-600 bg-clip-text text-transparent">
+            Cotizaciones
+          </h1>
           <p className="text-muted-foreground">Gestión de cotizaciones de carpintería</p>
         </div>
         <Button
-          onClick={() => setViewMode('create')}
-          className="bg-amber-600 hover:bg-amber-700"
+          onClick={() => { setEditingQuotation(null); setViewMode('create'); }}
+          className="gradient-amber hover:opacity-90 text-white border-0 shadow-md"
         >
           <Plus className="h-4 w-4 mr-2" />
           Nueva Cotización
@@ -252,7 +321,7 @@ export function QuotationsView() {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <Card key={i}>
+            <Card key={i} className="shadow-premium">
               <CardContent className="p-5">
                 <div className="h-16 bg-muted animate-pulse rounded" />
               </CardContent>
@@ -260,7 +329,7 @@ export function QuotationsView() {
           ))}
         </div>
       ) : filteredQuotations.length === 0 ? (
-        <Card>
+        <Card className="shadow-premium">
           <CardContent className="py-12 text-center">
             <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
             <p className="text-muted-foreground">No hay cotizaciones</p>
@@ -268,7 +337,7 @@ export function QuotationsView() {
               variant="outline"
               size="sm"
               className="mt-3"
-              onClick={() => setViewMode('create')}
+              onClick={() => { setEditingQuotation(null); setViewMode('create'); }}
             >
               Crear primera cotización
             </Button>
@@ -279,12 +348,12 @@ export function QuotationsView() {
           {filteredQuotations.map((q) => {
             const statusInfo = QUOTATION_STATUS[q.status as keyof typeof QUOTATION_STATUS];
             return (
-              <Card key={q.id} className="hover:shadow-md transition-shadow">
+              <Card key={q.id} className="shadow-premium hover:shadow-premium-lg transition-all duration-300 group">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-start gap-3">
-                      <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-amber-50 mt-0.5">
-                        <FileText className="h-5 w-5 text-amber-600" />
+                      <div className="flex items-center justify-center h-10 w-10 rounded-xl gradient-warm mt-0.5 shrink-0">
+                        <FileText className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2 mb-1">
@@ -305,27 +374,26 @@ export function QuotationsView() {
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <p className="font-bold text-amber-700">{formatCOP(q.total)}</p>
+                        <p className="font-bold text-amber-700 dark:text-amber-400">{formatCOP(q.total)}</p>
                         <p className="text-xs text-muted-foreground">
                           Margen: {q.margin}%
                         </p>
                       </div>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => viewQuotation(q.id)}
-                        >
+                      <div className="flex gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver" onClick={() => viewQuotation(q.id)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-red-500"
-                          onClick={() => setDeleteConfirm(q)}
-                        >
-                          <Trash2 className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => startEdit(q)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Duplicar" onClick={() => handleDuplicate(q)} disabled={duplicating === q.id}>
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="PDF" onClick={() => handleDownloadPdf(q)}>
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" title="Eliminar" onClick={() => setDeleteConfirm(q)}>
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>

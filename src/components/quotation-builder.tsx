@@ -26,8 +26,9 @@ import {
   Eye,
   Camera,
   Sparkles,
+  Check,
 } from 'lucide-react';
-import { formatCOP, FURNITURE_TYPES, MATERIAL_CATEGORIES } from '@/lib/format';
+import { formatCOP, FURNITURE_TYPES } from '@/lib/format';
 import { PhotoAnalyzer } from './photo-analyzer';
 
 interface FurnitureTemplate {
@@ -90,6 +91,20 @@ interface QuotationItemDraft {
   totalSubtotal: number;
 }
 
+interface InitialItem {
+  templateId: string | null;
+  customName: string | null;
+  width: number;
+  height: number;
+  depth: number | null;
+  quantity: number;
+  materialType: string | null;
+  finishType: string | null;
+  subtotal: number;
+  detail: string | null;
+  template?: { name: string; type: string } | null;
+}
+
 interface QuotationBuilderProps {
   onSave: (data: {
     clientName: string;
@@ -111,18 +126,27 @@ interface QuotationBuilderProps {
     }>;
   }) => void;
   onCancel: () => void;
+  initialData?: {
+    id: string;
+    clientName: string;
+    project: string;
+    location: string | null;
+    notes: string | null;
+    margin: number;
+    items: InitialItem[];
+  };
 }
 
 const MATERIAL_TYPES = ['MDF', 'Melamina', 'Madera'];
 const FINISH_TYPES = ['Lacado', 'Barniz', 'Poliuretano', 'Melamina', 'Natural'];
 
-export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
+export function QuotationBuilder({ onSave, onCancel, initialData }: QuotationBuilderProps) {
   const [step, setStep] = useState(1);
-  const [clientName, setClientName] = useState('');
-  const [project, setProject] = useState('');
-  const [location, setLocation] = useState('');
-  const [notes, setNotes] = useState('');
-  const [margin, setMargin] = useState(25);
+  const [clientName, setClientName] = useState(initialData?.clientName || '');
+  const [project, setProject] = useState(initialData?.project || '');
+  const [location, setLocation] = useState(initialData?.location || '');
+  const [notes, setNotes] = useState(initialData?.notes || '');
+  const [margin, setMargin] = useState(initialData?.margin || 25);
   const [items, setItems] = useState<QuotationItemDraft[]>([]);
   const [templates, setTemplates] = useState<FurnitureTemplate[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -133,6 +157,27 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
     loadTemplates();
     loadMaterials();
   }, []);
+
+  // Load initial items if editing
+  useEffect(() => {
+    if (initialData && items.length === 0) {
+      const initialItems: QuotationItemDraft[] = initialData.items.map((item) => ({
+        templateId: item.templateId || '',
+        templateName: item.template?.name || item.customName || '',
+        customName: item.customName || '',
+        width: item.width,
+        height: item.height,
+        depth: item.depth || 0,
+        quantity: item.quantity,
+        materialType: item.materialType || '',
+        finishType: item.finishType || '',
+        subtotal: item.subtotal,
+        breakdown: item.detail ? (typeof item.detail === 'string' ? JSON.parse(item.detail) : item.detail) : null,
+        totalSubtotal: item.subtotal * item.quantity,
+      }));
+      setItems(initialItems);
+    }
+  }, [initialData]);
 
   async function loadTemplates() {
     try {
@@ -221,12 +266,10 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
     const updated = [...items];
     updated[index] = { ...updated[index], [field]: value };
 
-    // Auto-fill dimensions when template is selected
     if (field === 'templateId' && value) {
       const template = templates.find((t) => t.id === value);
       if (template) {
         updated[index].templateName = template.name;
-        // Set default dimensions based on template type
         const defaults: Record<string, { w: number; h: number; d: number }> = {
           'Módulo Cocina Base': { w: 600, h: 720, d: 580 },
           'Módulo Cocina Alto': { w: 600, h: 720, d: 350 },
@@ -244,7 +287,6 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
       }
     }
 
-    // Reset breakdown when dimensions change
     if (['width', 'height', 'depth', 'materialType', 'finishType'].includes(field)) {
       updated[index].breakdown = null;
       updated[index].subtotal = 0;
@@ -301,18 +343,23 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
           { num: 3, label: 'Revisión' },
         ].map((s, i) => (
           <div key={s.num} className="flex items-center gap-2">
-            <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                step >= s.num
-                  ? 'bg-amber-100 text-amber-800'
+            <button
+              onClick={() => { if (s.num < step || (s.num === 2 && clientName && project)) setStep(s.num); }}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${
+                step === s.num
+                  ? 'gradient-amber text-white shadow-md'
+                  : step > s.num
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
                   : 'bg-muted text-muted-foreground'
               }`}
             >
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-600 text-white text-xs">
-                {s.num}
+              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
+                step > s.num ? 'bg-emerald-600 text-white' : 'bg-white/20 text-current'
+              }`}>
+                {step > s.num ? <Check className="h-3 w-3" /> : s.num}
               </span>
               <span className="hidden sm:inline">{s.label}</span>
-            </div>
+            </button>
             {i < 2 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
           </div>
         ))}
@@ -320,9 +367,11 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
 
       {/* Step 1: Client Info */}
       {step === 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Información del Cliente</CardTitle>
+        <Card className="shadow-premium">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base bg-gradient-to-r from-amber-700 to-amber-900 dark:from-amber-400 dark:to-amber-600 bg-clip-text text-transparent">
+              Información del Cliente
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -376,13 +425,13 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
                 onClick={() => setShowPhotoAnalyzer(true)}
                 size="sm"
                 variant="outline"
-                className="gap-1 border-purple-300 text-purple-700 hover:bg-purple-50"
+                className="gap-1 border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-400 dark:hover:bg-purple-900/20"
               >
                 <Camera className="h-4 w-4" />
                 <span className="hidden sm:inline">Cotizar</span> desde Foto
                 <Sparkles className="h-3 w-3" />
               </Button>
-              <Button onClick={addItem} size="sm" className="bg-amber-600 hover:bg-amber-700">
+              <Button onClick={addItem} size="sm" className="gradient-amber hover:opacity-90 text-white border-0">
                 <Plus className="h-4 w-4 mr-1" /> Agregar Item
               </Button>
             </div>
@@ -390,12 +439,11 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
 
           {/* Photo Analyzer */}
           {showPhotoAnalyzer && (
-            <Card className="border-purple-200 bg-purple-50/30">
+            <Card className="border-purple-200 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-900/10">
               <CardContent className="p-4">
                 <PhotoAnalyzer
                   templates={templates}
                   onAnalysisComplete={(analysisResult) => {
-                    // Add a new item with the analysis results
                     const newItem: QuotationItemDraft = {
                       templateId: analysisResult.templateId || '',
                       templateName: analysisResult.templateName,
@@ -421,7 +469,7 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
           )}
 
           {items.length === 0 ? (
-            <Card>
+            <Card className="shadow-premium">
               <CardContent className="py-12 text-center">
                 <Package className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-50" />
                 <p className="text-muted-foreground">Agregue items a la cotización</p>
@@ -432,10 +480,13 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
             </Card>
           ) : (
             items.map((item, index) => (
-              <Card key={index}>
+              <Card key={index} className="shadow-premium hover:shadow-premium-lg transition-all duration-300">
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm">Item {index + 1}</span>
+                    <span className="font-medium text-sm flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full gradient-amber text-white text-xs">{index + 1}</span>
+                      Item {index + 1}
+                    </span>
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => removeItem(index)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -527,7 +578,7 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
                     <div className="flex items-end">
                       <Button
                         onClick={() => calculateItem(index)}
-                        className="w-full bg-amber-600 hover:bg-amber-700"
+                        className="w-full gradient-amber hover:opacity-90 text-white border-0"
                         disabled={!item.templateId || !item.width || !item.height || !!calculating}
                       >
                         {calculating === item.templateId + index ? (
@@ -544,16 +595,16 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
 
                   {/* Breakdown */}
                   {item.breakdown && (
-                    <div className="mt-3 border rounded-lg overflow-hidden">
-                      <div className="bg-amber-50 px-3 py-2">
-                        <span className="text-sm font-medium text-amber-800">
+                    <div className="mt-3 border rounded-xl overflow-hidden">
+                      <div className="gradient-warm px-3 py-2">
+                        <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
                           Desglose - {item.templateName}
                         </span>
                       </div>
                       <div className="max-h-48 overflow-y-auto">
                         <table className="w-full text-xs">
                           <thead>
-                            <tr className="border-b bg-muted/50">
+                            <tr className="border-b bg-muted/30">
                               <th className="text-left p-2">Componente</th>
                               <th className="text-right p-2">Material</th>
                               <th className="text-right p-2">Canto</th>
@@ -566,7 +617,7 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
                             {item.breakdown.map((b, bi) => (
                               <tr key={bi} className="border-b last:border-0">
                                 <td className="p-2">
-                                  {b.name}
+                                  {b.componentName || b.name}
                                   <span className="text-muted-foreground ml-1">x{b.quantity}</span>
                                 </td>
                                 <td className="text-right p-2">{formatCOP(b.materialCost)}</td>
@@ -579,18 +630,18 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
                           </tbody>
                         </table>
                       </div>
-                      <div className="bg-amber-50 px-3 py-2 flex justify-between items-center">
-                        <span className="text-sm font-medium text-amber-800">
+                      <div className="gradient-warm px-3 py-2 flex justify-between items-center">
+                        <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
                           Subtotal unitario
                         </span>
-                        <span className="font-bold text-amber-900">{formatCOP(item.subtotal)}</span>
+                        <span className="font-bold text-amber-900 dark:text-amber-100">{formatCOP(item.subtotal)}</span>
                       </div>
                       {item.quantity > 1 && (
-                        <div className="bg-amber-100 px-3 py-2 flex justify-between items-center">
-                          <span className="text-sm font-medium text-amber-900">
+                        <div className="bg-amber-200/50 dark:bg-amber-900/30 px-3 py-2 flex justify-between items-center">
+                          <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
                             Subtotal x{item.quantity}
                           </span>
-                          <span className="font-bold text-amber-900">{formatCOP(item.totalSubtotal)}</span>
+                          <span className="font-bold text-amber-900 dark:text-amber-100">{formatCOP(item.totalSubtotal)}</span>
                         </div>
                       )}
                     </div>
@@ -605,10 +656,11 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
       {/* Step 3: Review */}
       {step === 3 && (
         <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Eye className="h-5 w-5" />
+          <Card className="shadow-premium overflow-hidden">
+            <div className="h-1 gradient-amber" />
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Eye className="h-5 w-5 text-amber-600" />
                 Revisión de Cotización
               </CardTitle>
             </CardHeader>
@@ -630,10 +682,10 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
                 )}
               </div>
 
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border rounded-xl overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b bg-muted/50">
+                    <tr className="border-b bg-muted/30">
                       <th className="text-left p-3">Item</th>
                       <th className="text-center p-3">Cant.</th>
                       <th className="text-center p-3">Dimensiones</th>
@@ -685,7 +737,7 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t">
                   <span className="text-lg font-bold">TOTAL:</span>
-                  <span className="text-lg font-bold text-amber-700">{formatCOP(total)}</span>
+                  <span className="text-lg font-bold text-amber-700 dark:text-amber-400">{formatCOP(total)}</span>
                 </div>
               </div>
             </CardContent>
@@ -702,15 +754,16 @@ export function QuotationBuilder({ onSave, onCancel }: QuotationBuilderProps) {
         {step < 3 ? (
           <Button
             onClick={() => setStep(step + 1)}
-            className="bg-amber-600 hover:bg-amber-700"
+            className="gradient-amber hover:opacity-90 text-white border-0"
             disabled={step === 1 && (!clientName || !project)}
           >
             Siguiente
             <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         ) : (
-          <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700">
-            Guardar Cotización
+          <Button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Check className="h-4 w-4 mr-1" />
+            {initialData ? 'Actualizar Cotización' : 'Guardar Cotización'}
           </Button>
         )}
       </div>

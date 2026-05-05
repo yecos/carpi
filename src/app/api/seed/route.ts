@@ -11,6 +11,7 @@ export async function POST() {
     await db.furnitureTemplate.deleteMany();
     await db.material.deleteMany();
     await db.supplier.deleteMany();
+    await db.client.deleteMany();
 
     // ============================================
     // 1. CREATE SUPPLIERS
@@ -50,6 +51,55 @@ export async function POST() {
           phone: '+57 601 555 0404',
           email: 'contacto@acabadospremium.com',
           address: 'Av. El Dorado #68-50, Bogotá, Cundinamarca',
+        },
+      }),
+    ]);
+
+    // ============================================
+    // 1.5 CREATE CLIENTS
+    // ============================================
+    const clients = await Promise.all([
+      db.client.create({
+        data: {
+          name: 'María Alejandra Gutiérrez',
+          phone: '+57 301 555 0101',
+          email: 'maria.gutierrez@email.com',
+          address: 'Cra 24 #56-78, Cali, Valle',
+          notes: 'Cliente frecuente, proyectos de cocina',
+        },
+      }),
+      db.client.create({
+        data: {
+          name: 'Juan Carlos Mejía',
+          phone: '+57 310 555 0202',
+          email: 'jc.mejia@email.com',
+          address: 'Cll 80 #15-20, Bogotá, Cundinamarca',
+        },
+      }),
+      db.client.create({
+        data: {
+          name: 'Ana Patricia López',
+          phone: '+57 320 555 0303',
+          email: 'ana.lopez@email.com',
+          address: 'Cra 45 #10-30, Medellín, Antioquia',
+          notes: 'Prefiere madera natural y acabados premium',
+        },
+      }),
+      db.client.create({
+        data: {
+          name: 'Roberto Castillo',
+          phone: '+57 315 555 0404',
+          email: 'roberto.castillo@email.com',
+          address: 'Av. Santander #22-15, Bucaramanga, Santander',
+        },
+      }),
+      db.client.create({
+        data: {
+          name: 'Laura Valentina Ríos',
+          phone: '+57 318 555 0505',
+          email: 'laura.rios@email.com',
+          address: 'Cll 12 #8-45, Pereira, Risaralda',
+          notes: 'Proyectos de interiorismo residencial',
         },
       }),
     ]);
@@ -1158,6 +1208,7 @@ export async function POST() {
     return NextResponse.json({
       message: 'Base de datos poblada exitosamente',
       suppliers: suppliers.length,
+      clients: clients.length,
       materials: materials.length,
       templates: 6,
     });

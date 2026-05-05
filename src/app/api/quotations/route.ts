@@ -46,6 +46,7 @@ export async function POST(request: Request) {
     const quotation = await db.quotation.create({
       data: {
         clientName: body.clientName,
+        clientId: body.clientId || null,
         project: body.project,
         location: body.location || null,
         notes: body.notes || null,

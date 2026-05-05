@@ -19,6 +19,7 @@ export async function GET(
             material: true,
           },
         },
+        client: true,
       },
     });
 
@@ -58,6 +59,7 @@ export async function PUT(
         where: { id },
         data: {
           clientName: body.clientName,
+          clientId: body.clientId || null,
           project: body.project,
           location: body.location || null,
           notes: body.notes || null,
@@ -99,6 +101,7 @@ export async function PUT(
         where: { id },
         data: {
           clientName: body.clientName,
+          clientId: body.clientId,
           project: body.project,
           location: body.location,
           notes: body.notes,

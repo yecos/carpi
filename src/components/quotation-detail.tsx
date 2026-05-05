@@ -20,8 +20,11 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  Pencil,
+  Copy,
+  Download,
 } from 'lucide-react';
-import { formatCOP, formatDate, QUOTATION_STATUS, FURNITURE_TYPES } from '@/lib/format';
+import { formatCOP, formatDate, QUOTATION_STATUS } from '@/lib/format';
 import { useState } from 'react';
 
 interface ComponentBreakdown {
@@ -74,9 +77,12 @@ interface QuotationDetailProps {
   quotation: Quotation;
   onBack: () => void;
   onUpdate: () => void;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onPdf: () => void;
 }
 
-export function QuotationDetail({ quotation, onBack, onUpdate }: QuotationDetailProps) {
+export function QuotationDetail({ quotation, onBack, onUpdate, onEdit, onDuplicate, onPdf }: QuotationDetailProps) {
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const [updating, setUpdating] = useState(false);
 
@@ -117,7 +123,7 @@ export function QuotationDetail({ quotation, onBack, onUpdate }: QuotationDetail
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between print:hidden">
+      <div className="flex items-center justify-between no-print">
         <Button variant="ghost" onClick={onBack}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Volver
         </Button>
@@ -136,8 +142,17 @@ export function QuotationDetail({ quotation, onBack, onUpdate }: QuotationDetail
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-1" /> Imprimir
+          <Button variant="outline" size="sm" onClick={onEdit} title="Editar">
+            <Pencil className="h-4 w-4 mr-1" /> Editar
+          </Button>
+          <Button variant="outline" size="sm" onClick={onDuplicate} title="Duplicar">
+            <Copy className="h-4 w-4 mr-1" /> Duplicar
+          </Button>
+          <Button variant="outline" size="sm" onClick={onPdf} title="Descargar PDF">
+            <Download className="h-4 w-4 mr-1" /> PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={handlePrint} title="Imprimir">
+            <Printer className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -145,11 +160,14 @@ export function QuotationDetail({ quotation, onBack, onUpdate }: QuotationDetail
       {/* Printable Content */}
       <div className="print:block">
         {/* Title Section */}
-        <Card className="print:shadow-none print:border-0">
-          <CardHeader>
+        <Card className="shadow-premium print:shadow-none print:border-0 overflow-hidden">
+          <div className="h-1.5 gradient-amber" />
+          <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-xl">Cotización</CardTitle>
+                <CardTitle className="text-xl bg-gradient-to-r from-amber-700 to-amber-900 dark:from-amber-400 dark:to-amber-600 bg-clip-text text-transparent">
+                  Cotización
+                </CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
                   {formatDate(quotation.createdAt)}
                 </p>
@@ -162,31 +180,31 @@ export function QuotationDetail({ quotation, onBack, onUpdate }: QuotationDetail
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
               <div className="flex items-start gap-2">
-                <User className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <User className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-muted-foreground">Cliente</p>
+                  <p className="text-muted-foreground text-xs">Cliente</p>
                   <p className="font-medium">{quotation.clientName}</p>
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <FileText className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-muted-foreground">Proyecto</p>
+                  <p className="text-muted-foreground text-xs">Proyecto</p>
                   <p className="font-medium">{quotation.project}</p>
                 </div>
               </div>
               {quotation.location && (
                 <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <MapPin className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-muted-foreground">Ubicación</p>
+                    <p className="text-muted-foreground text-xs">Ubicación</p>
                     <p className="font-medium">{quotation.location}</p>
                   </div>
                 </div>
               )}
             </div>
             {quotation.notes && (
-              <div className="mt-3 text-sm text-muted-foreground">
+              <div className="mt-3 text-sm text-muted-foreground bg-warm/50 dark:bg-warm/20 p-3 rounded-lg">
                 <strong>Notas:</strong> {quotation.notes}
               </div>
             )}
@@ -194,9 +212,9 @@ export function QuotationDetail({ quotation, onBack, onUpdate }: QuotationDetail
         </Card>
 
         {/* Items */}
-        <Card className="mt-4 print:shadow-none print:border-0">
-          <CardHeader>
-            <CardTitle className="text-lg">Items</CardTitle>
+        <Card className="mt-4 shadow-premium print:shadow-none print:border-0">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Items</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {quotation.items.map((item, index) => {
@@ -213,15 +231,15 @@ export function QuotationDetail({ quotation, onBack, onUpdate }: QuotationDetail
               const itemName = item.customName || item.template?.name || 'Sin nombre';
 
               return (
-                <div key={item.id} className="border rounded-lg overflow-hidden">
+                <div key={item.id} className="border rounded-xl overflow-hidden hover:border-amber-200 dark:hover:border-amber-800 transition-colors">
                   <div
-                    className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+                    className="p-4 cursor-pointer hover:bg-muted/30 transition-colors"
                     onClick={() => toggleItem(index)}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-50">
-                          <FileText className="h-4 w-4 text-amber-600" />
+                        <div className="flex items-center justify-center h-8 w-8 rounded-lg gradient-warm shrink-0">
+                          <FileText className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                         </div>
                         <div>
                           <p className="font-medium text-sm">{itemName}</p>
@@ -234,7 +252,7 @@ export function QuotationDetail({ quotation, onBack, onUpdate }: QuotationDetail
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-muted-foreground">×{item.quantity}</span>
-                        <span className="font-semibold">{formatCOP(item.subtotal * item.quantity)}</span>
+                        <span className="font-semibold text-sm">{formatCOP(item.subtotal * item.quantity)}</span>
                         {breakdown && (
                           isExpanded ? (
                             <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -247,10 +265,10 @@ export function QuotationDetail({ quotation, onBack, onUpdate }: QuotationDetail
                   </div>
 
                   {isExpanded && breakdown && (
-                    <div className="border-t bg-muted/20">
+                    <div className="border-t bg-muted/10">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b bg-muted/50">
+                          <tr className="border-b bg-muted/30">
                             <th className="text-left p-2">Componente</th>
                             <th className="text-center p-2">Cant</th>
                             <th className="text-right p-2">Material</th>
@@ -283,7 +301,8 @@ export function QuotationDetail({ quotation, onBack, onUpdate }: QuotationDetail
         </Card>
 
         {/* Totals */}
-        <Card className="mt-4 print:shadow-none print:border-0">
+        <Card className="mt-4 shadow-premium print:shadow-none print:border-0 overflow-hidden">
+          <div className="h-1 gradient-amber opacity-50" />
           <CardContent className="p-5">
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
@@ -297,7 +316,7 @@ export function QuotationDetail({ quotation, onBack, onUpdate }: QuotationDetail
               <Separator />
               <div className="flex justify-between text-lg font-bold">
                 <span>TOTAL</span>
-                <span className="text-amber-700">{formatCOP(quotation.total)}</span>
+                <span className="text-amber-700 dark:text-amber-400">{formatCOP(quotation.total)}</span>
               </div>
             </div>
           </CardContent>

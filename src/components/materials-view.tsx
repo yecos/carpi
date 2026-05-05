@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,8 +32,8 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Package, Search } from 'lucide-react';
-import { formatCOP, MATERIAL_CATEGORIES, UNITS } from '@/lib/format';
+import { Plus, Pencil, Trash2, Package, Search, AlertTriangle, Download } from 'lucide-react';
+import { formatCOP, MATERIAL_CATEGORIES, UNITS, isPriceStale, formatDateRelative } from '@/lib/format';
 
 interface Material {
   id: string;
@@ -49,6 +49,7 @@ interface Material {
   color: string | null;
   materialType: string | null;
   active: boolean;
+  priceUpdatedAt: string | null;
 }
 
 interface Supplier {
@@ -163,6 +164,7 @@ export function MaterialsView() {
         length: form.length ? parseFloat(form.length) : null,
         color: form.color || null,
         materialType: form.materialType || null,
+        priceUpdatedAt: new Date().toISOString(),
       };
 
       if (editingMaterial) {
@@ -201,6 +203,27 @@ export function MaterialsView() {
     }
   }
 
+  async function handleExportExcel() {
+    try {
+      const res = await fetch('/api/export/excel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'materials' }),
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `materiales_${new Date().toISOString().split('T')[0]}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Excel exportado');
+    } catch (error) {
+      console.error('Error exporting:', error);
+      toast.error('Error al exportar Excel');
+    }
+  }
+
   const filteredMaterials = materials.filter(
     (m) =>
       m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -218,16 +241,21 @@ export function MaterialsView() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Materiales</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-700 to-amber-900 dark:from-amber-400 dark:to-amber-600 bg-clip-text text-transparent">Materiales</h1>
           <p className="text-muted-foreground">Gestión de materiales e insumos</p>
         </div>
-        <Button onClick={openCreateDialog} className="bg-amber-600 hover:bg-amber-700">
-          <Plus className="h-4 w-4 mr-2" />
-          Nuevo Material
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportExcel}>
+            <Download className="h-4 w-4 mr-1" /> Exportar
+          </Button>
+          <Button onClick={openCreateDialog} className="gradient-amber text-white hover:opacity-90 shadow-glow-sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Nuevo Material
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -253,7 +281,7 @@ export function MaterialsView() {
       </div>
 
       {/* Materials Table */}
-      <Card>
+      <Card className="shadow-premium overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -265,6 +293,7 @@ export function MaterialsView() {
                   <th className="text-left p-3 text-sm font-medium text-muted-foreground">Unidad</th>
                   <th className="text-right p-3 text-sm font-medium text-muted-foreground">Precio</th>
                   <th className="text-left p-3 text-sm font-medium text-muted-foreground">Proveedor</th>
+                  <th className="text-center p-3 text-sm font-medium text-muted-foreground">Estado</th>
                   <th className="text-center p-3 text-sm font-medium text-muted-foreground">Acciones</th>
                 </tr>
               </thead>
@@ -272,53 +301,68 @@ export function MaterialsView() {
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="border-b">
-                      <td colSpan={7} className="p-3">
+                      <td colSpan={8} className="p-3">
                         <div className="h-5 bg-muted animate-pulse rounded" />
                       </td>
                     </tr>
                   ))
                 ) : filteredMaterials.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={8} className="p-8 text-center text-muted-foreground">
                       <Package className="h-10 w-10 mx-auto mb-2 opacity-50" />
                       No se encontraron materiales
                     </td>
                   </tr>
                 ) : (
-                  filteredMaterials.map((material) => (
-                    <tr key={material.id} className="border-b hover:bg-muted/30 transition-colors">
-                      <td className="p-3">
-                        <div>
-                          <p className="font-medium text-sm">{material.name}</p>
-                          {material.color && (
-                            <p className="text-xs text-muted-foreground">{material.color}</p>
+                  filteredMaterials.map((material) => {
+                    const stale = isPriceStale(material.priceUpdatedAt);
+                    return (
+                      <tr key={material.id} className="border-b hover:bg-muted/30 transition-colors">
+                        <td className="p-3">
+                          <div>
+                            <p className="font-medium text-sm">{material.name}</p>
+                            {material.color && (
+                              <p className="text-xs text-muted-foreground">{material.color}</p>
+                            )}
+                            {material.thickness && (
+                              <p className="text-xs text-muted-foreground">{material.thickness}mm</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <Badge variant="secondary" className="text-xs">
+                            {MATERIAL_CATEGORIES[material.category as keyof typeof MATERIAL_CATEGORIES] || material.category}
+                          </Badge>
+                        </td>
+                        <td className="p-3 text-sm">{material.materialType || '-'}</td>
+                        <td className="p-3 text-sm">{UNITS[material.unit as keyof typeof UNITS] || material.unit}</td>
+                        <td className="p-3 text-right font-medium text-sm">{formatCOP(material.price)}</td>
+                        <td className="p-3 text-sm">{material.supplier?.name || '-'}</td>
+                        <td className="p-3 text-center">
+                          {stale ? (
+                            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-xs gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              Desactualizado
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
+                              Actualizado
+                            </Badge>
                           )}
-                          {material.thickness && (
-                            <p className="text-xs text-muted-foreground">{material.thickness}mm</p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <Badge variant="secondary" className="text-xs">
-                          {MATERIAL_CATEGORIES[material.category as keyof typeof MATERIAL_CATEGORIES] || material.category}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-sm">{material.materialType || '-'}</td>
-                      <td className="p-3 text-sm">{UNITS[material.unit as keyof typeof UNITS] || material.unit}</td>
-                      <td className="p-3 text-right font-medium text-sm">{formatCOP(material.price)}</td>
-                      <td className="p-3 text-sm">{material.supplier?.name || '-'}</td>
-                      <td className="p-3">
-                        <div className="flex items-center justify-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(material)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setDeleteConfirm(material)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(material)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setDeleteConfirm(material)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -406,7 +450,7 @@ export function MaterialsView() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} className="bg-amber-600 hover:bg-amber-700">
+            <Button onClick={handleSave} className="gradient-amber text-white hover:opacity-90">
               {editingMaterial ? 'Actualizar' : 'Crear'}
             </Button>
           </DialogFooter>

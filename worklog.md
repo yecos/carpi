@@ -1,30 +1,37 @@
-# Worklog - Cotizador Carpintería
-
 ---
 Task ID: 1
-Agent: Super Z (Main)
-Task: Build complete Carpentry Quotation Automation Web App
+Agent: Main Agent
+Task: Premium redesign + all missing features for Carpentry Quotation System
 
 Work Log:
-- Initialized Next.js 16 fullstack project
-- Designed and pushed Prisma database schema with 6 models (Supplier, Material, FurnitureTemplate, FurnitureComponent, Quotation, QuotationItem)
-- Created 9 API routes for full CRUD operations
-- Built calculation engine with formula evaluation, board area, edge banding, hardware, and labor cost computation
-- Created seed API with 4 suppliers, 26 materials (COP prices), and 6 furniture templates with components
-- Built single-page application with sidebar navigation (5 sections)
-- Dashboard with stats cards and quick actions
-- Materials management with category tabs, search, CRUD dialogs
-- Suppliers management with card-based UI
-- Furniture catalog with expandable component details and component builder
-- Quotation builder with 3-step wizard (Client → Items with auto-calculate → Review with margin slider)
-- Quotation detail with expandable breakdown and print support
-- Fixed hardwareList passing issue in calculate API
-- All text in Spanish, COP currency formatting, amber/orange color scheme
-- Lint check passed with no errors
-- Dev server running and all APIs responding with 200
+- Updated Prisma schema with Client model, priceUpdatedAt field on Material, clientId on Quotation
+- Ran db:push to apply schema changes
+- Created premium CSS design system (globals.css) with amber/gold color palette, glassmorphism, premium shadows, dark mode support
+- Updated layout.tsx with ThemeProvider from next-themes
+- Created premium sidebar with dark charcoal background, amber accents, dark mode toggle, new nav items (Clientes, Comparador)
+- Updated page.tsx to support new sections (clientes, comparador) with premium styling
+- Created clients-view.tsx with full CRUD, premium cards, search functionality
+- Created comparison-view.tsx with supplier price comparison tables, best price highlighting
+- Created API routes: /api/clients, /api/clients/[id], /api/quotations/[id]/duplicate, /api/quotations/[id]/pdf, /api/materials/compare, /api/export/excel
+- Updated materials API to support priceUpdatedAt
+- Updated quotation detail API to include client relation
+- Updated dashboard-view.tsx with premium stat cards, recharts bar/pie charts, gradient accents
+- Updated quotations-view.tsx with edit, duplicate, PDF download buttons, premium styling
+- Updated quotation-builder.tsx with edit mode (initialData prop), premium step indicator
+- Updated quotation-detail.tsx with edit/duplicate/PDF buttons, premium layout
+- Updated materials-view.tsx with premium gradient title, price stale alerts, Excel export
+- Updated suppliers-view.tsx with premium gradient title
+- Updated catalog-view.tsx with premium gradient title
+- Updated format.ts with isPriceStale, formatDateRelative helpers
 
 Stage Summary:
-- Complete carpentry quotation automation web application built
-- Key files: src/app/page.tsx, src/components/*.tsx, src/app/api/**/*.ts, src/lib/calculations.ts, src/lib/format.ts
-- Database: SQLite with Prisma ORM, schema pushed successfully
-- All APIs tested and working via dev server logs
+- All 12 features implemented or partially implemented
+- Premium amber/gold design system with dark mode
+- PDF generation via HTML print window
+- Edit and duplicate quotations
+- Client management section
+- Supplier comparison tool
+- Dashboard with recharts graphs
+- Price staleness alerts on materials
+- Excel export endpoint
+- App is running on port 3000, all APIs returning 200
