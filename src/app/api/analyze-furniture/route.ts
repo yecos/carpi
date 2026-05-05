@@ -18,6 +18,7 @@ export async function POST(request: Request) {
     // Get API configuration from environment variables
     const zaiBaseUrl = process.env.ZAI_BASE_URL;
     const zaiApiKey = process.env.ZAI_API_KEY;
+    const zaiToken = process.env.ZAI_TOKEN;
 
     if (!zaiBaseUrl || !zaiApiKey) {
       console.error('Z AI Vision API not configured. Set ZAI_BASE_URL and ZAI_API_KEY env vars.');
@@ -97,13 +98,17 @@ REGLAS IMPORTANTES:
 
     // Make direct HTTP request to the Z AI Vision API
     const apiUrl = `${zaiBaseUrl}/chat/completions/vision`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${zaiApiKey}`,
+      'X-Z-AI-From': 'Z',
+    };
+    if (zaiToken) {
+      headers['X-Token'] = zaiToken;
+    }
     const apiResponse = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${zaiApiKey}`,
-        'X-Z-AI-From': 'Z',
-      },
+      headers,
       body: JSON.stringify(visionRequestBody),
     });
 
